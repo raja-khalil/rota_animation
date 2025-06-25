@@ -1,0 +1,56 @@
+{
+  "name": "Animação de Rotas Estilo Uber",
+  "short_name": "RotasApp",
+  "description": "Aplicação para visualizar animações de veículos em rotas do Google Maps",
+  "version": "1.0.0",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#667eea",
+  "theme_color": "#00d4aa",
+  "orientation": "portrait-primary",
+  "scope": "/",
+  "lang": "pt-BR",
+  "icons": [
+    {
+      "src": "/static/images/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/static/images/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["navigation", "travel", "utilities"],
+  "screenshots": [
+    {
+      "src": "/static/images/screenshot-wide.png",
+      "sizes": "1280x720",
+      "type": "image/png",
+      "form_factor": "wide"
+    },
+    {
+      "src": "/static/images/screenshot-narrow.png",
+      "sizes": "640x1136",
+      "type": "image/png",
+      "form_factor": "narrow"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Nova Rota",
+      "short_name": "Nova",
+      "description": "Calcular uma nova rota",
+      "url": "/?action=new",
+      "icons": [
+        {
+          "src": "/static/images/shortcut-new.png",
+          "sizes": "96x96"
+        }
+      ]
+    }
+  ]
+}

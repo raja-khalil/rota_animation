@@ -1,0 +1,21 @@
+services:
+  - type: web
+    name: animacao-rotas-app
+    env: python
+    region: oregon
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn app:app
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.0
+      - key: FLASK_ENV
+        value: production
+      - key: SECRET_KEY
+        generateValue: true
+    healthCheckPath: /health
+    autoDeploy: true
+    disk:
+      name: app-disk
+      size: 1GB
+      mountPath: /opt/render/project/src

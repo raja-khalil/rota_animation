@@ -1,0 +1,704 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Animação de Carro no Google Maps (Estilo Uber)</title>
+    <style>
+        html, body {
+            height: 100%;
+            margin: 0;
+            padding: 0;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f8f9fa;
+        }
+        
+        #map {
+            height: 100%;
+            width: 100%;
+        }
+        
+        .control-panel {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            background: white;
+            padding: 20px;
+            border-radius: 12px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+            z-index: 1000;
+            min-width: 320px;
+            max-height: 90vh;
+            overflow-y: auto;
+        }
+        
+        .control-panel h3 {
+            margin: 0 0 15px 0;
+            color: #333;
+            font-size: 18px;
+            font-weight: 600;
+        }
+        
+        .route-section {
+            margin-bottom: 20px;
+            border-bottom: 1px solid #eee;
+            padding-bottom: 20px;
+        }
+        
+        .input-group {
+            margin-bottom: 15px;
+        }
+        
+        .input-group label {
+            display: block;
+            margin-bottom: 6px;
+            color: #555;
+            font-weight: 500;
+            font-size: 14px;
+        }
+        
+        .address-input {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e9ecef;
+            border-radius: 8px;
+            font-size: 14px;
+            transition: border-color 0.3s ease;
+            box-sizing: border-box;
+        }
+        
+        .address-input:focus {
+            outline: none;
+            border-color: #00d4aa;
+        }
+        
+        .address-input.error {
+            border-color: #e74c3c;
+        }
+        
+        .route-button {
+            width: 100%;
+            padding: 12px;
+            background: #007bff;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            margin-top: 10px;
+        }
+        
+        .route-button:hover:not(:disabled) {
+            background: #0056b3;
+            transform: translateY(-1px);
+        }
+        
+        .route-button:disabled {
+            background: #ddd;
+            color: #999;
+            cursor: not-allowed;
+            transform: none;
+        }
+        
+        .button-group {
+            display: flex;
+            gap: 10px;
+            margin: 15px 0;
+        }
+        
+        button {
+            padding: 12px 20px;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            flex: 1;
+        }
+        
+        .btn-start {
+            background: #00d4aa;
+            color: white;
+        }
+        
+        .btn-start:hover:not(:disabled) {
+            background: #00b894;
+            transform: translateY(-1px);
+        }
+        
+        .btn-stop {
+            background: #e74c3c;
+            color: white;
+        }
+        
+        .btn-stop:hover:not(:disabled) {
+            background: #c0392b;
+            transform: translateY(-1px);
+        }
+        
+        .btn-reset {
+            background: #6c757d;
+            color: white;
+        }
+        
+        .btn-reset:hover:not(:disabled) {
+            background: #5a6268;
+            transform: translateY(-1px);
+        }
+        
+        button:disabled {
+            background: #ddd !important;
+            color: #999 !important;
+            cursor: not-allowed;
+            transform: none !important;
+        }
+        
+        .speed-control {
+            margin: 15px 0;
+        }
+        
+        .speed-control label {
+            display: block;
+            margin-bottom: 8px;
+            color: #555;
+            font-weight: 500;
+        }
+        
+        .speed-slider {
+            width: 100%;
+            margin: 10px 0;
+        }
+        
+        .status {
+            margin-top: 15px;
+            padding: 10px;
+            border-radius: 6px;
+            font-size: 14px;
+            text-align: center;
+        }
+        
+        .status.idle {
+            background: #e9ecef;
+            color: #6c757d;
+        }
+        
+        .status.loading {
+            background: #fff3cd;
+            color: #856404;
+        }
+        
+        .status.running {
+            background: #d1ecf1;
+            color: #0c5460;
+        }
+        
+        .status.completed {
+            background: #d4edda;
+            color: #155724;
+        }
+        
+        .status.error {
+            background: #f8d7da;
+            color: #721c24;
+        }
+        
+        .route-info {
+            margin-top: 15px;
+            font-size: 12px;
+            color: #666;
+        }
+        
+        .loading {
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            border: 2px solid #f3f3f3;
+            border-top: 2px solid #007bff;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-right: 8px;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .suggestions {
+            background: white;
+            border: 1px solid #ddd;
+            border-top: none;
+            border-radius: 0 0 8px 8px;
+            max-height: 200px;
+            overflow-y: auto;
+            position: absolute;
+            width: 100%;
+            z-index: 1001;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        
+        .suggestion-item {
+            padding: 12px;
+            cursor: pointer;
+            border-bottom: 1px solid #eee;
+            font-size: 14px;
+        }
+        
+        .suggestion-item:hover {
+            background: #f8f9fa;
+        }
+        
+        .suggestion-item:last-child {
+            border-bottom: none;
+        }
+        
+        .input-container {
+            position: relative;
+        }
+    </style>
+</head>
+<body>
+    <div class="control-panel">
+        <h3>🚗 Rota e Animação</h3>
+        
+        <!-- Seção de Entrada de Endereços -->
+        <div class="route-section">
+            <div class="input-group">
+                <label for="origin">📍 Endereço de Partida:</label>
+                <div class="input-container">
+                    <input type="text" 
+                           id="origin" 
+                           class="address-input" 
+                           placeholder="Ex: Av. Paulista, 1000, São Paulo - SP"
+                           autocomplete="off">
+                    <div id="originSuggestions" class="suggestions" style="display: none;"></div>
+                </div>
+            </div>
+            
+            <div class="input-group">
+                <label for="destination">🎯 Endereço de Destino:</label>
+                <div class="input-container">
+                    <input type="text" 
+                           id="destination" 
+                           class="address-input" 
+                           placeholder="Ex: Praça da República, São Paulo - SP"
+                           autocomplete="off">
+                    <div id="destinationSuggestions" class="suggestions" style="display: none;"></div>
+                </div>
+            </div>
+            
+            <button class="route-button" onclick="calculateRoute()" id="routeButton">
+                🗺️ Calcular Rota
+            </button>
+        </div>
+        
+        <!-- Controles de Animação -->
+        <div class="button-group">
+            <button class="btn-start" onclick="startAnimation()" id="startButton" disabled>Iniciar</button>
+            <button class="btn-stop" onclick="stopAnimation()" id="stopButton" disabled>Parar</button>
+            <button class="btn-reset" onclick="resetAnimation()" id="resetButton" disabled>Reset</button>
+        </div>
+        
+        <div class="speed-control">
+            <label for="speedSlider">Velocidade da Animação:</label>
+            <input type="range" id="speedSlider" class="speed-slider" 
+                   min="10" max="200" value="80" onchange="updateSpeed()">
+            <div style="display: flex; justify-content: space-between; font-size: 12px; color: #666;">
+                <span>Lento</span>
+                <span>Rápido</span>
+            </div>
+        </div>
+        
+        <div id="status" class="status idle">
+            Digite os endereços para começar
+        </div>
+        
+        <div class="route-info" id="routeInfo" style="display: none;">
+            <strong>Distância:</strong> <span id="distance">-</span><br>
+            <strong>Duração:</strong> <span id="duration">-</span><br>
+            <strong>Progresso:</strong> <span id="progress">0%</span>
+        </div>
+    </div>
+
+    <div id="map"></div>
+
+    <script>
+        let map;
+        let marker;
+        let polyline;
+        let pathIndex = 0;
+        let animationInterval;
+        let interpolatedPath = [];
+        let animationSpeed = 80;
+        let isAnimating = false;
+        let directionsService;
+        let directionsRenderer;
+        let autocompleteService;
+        let placesService;
+        let routeData = null;
+
+        async function initMap() {
+            // Inicializa o mapa
+            map = new google.maps.Map(document.getElementById("map"), {
+                zoom: 12,
+                center: { lat: -23.5505, lng: -46.6333 }, // São Paulo
+                mapTypeId: 'roadmap',
+                styles: [
+                    {
+                        featureType: 'poi',
+                        elementType: 'labels',
+                        stylers: [{ visibility: 'off' }]
+                    }
+                ]
+            });
+
+            // Inicializa serviços do Google Maps
+            directionsService = new google.maps.DirectionsService();
+            directionsRenderer = new google.maps.DirectionsRenderer({
+                suppressMarkers: true,
+                polylineOptions: {
+                    strokeColor: "#00d4aa",
+                    strokeOpacity: 1.0,
+                    strokeWeight: 4
+                }
+            });
+            directionsRenderer.setMap(map);
+
+            // Usar a nova API recomendada para autocomplete
+            try {
+                // Aguarda as bibliotecas serem carregadas
+                await google.maps.importLibrary("places");
+                placesService = new google.maps.places.PlacesService(map);
+            } catch (error) {
+                console.warn('Places library não disponível, usando autocomplete básico');
+            }
+
+            // Configura autocomplete para os inputs
+            setupAutocomplete();
+
+            updateStatus('idle', 'Digite os endereços para começar');
+        }
+
+        function setupAutocomplete() {
+            const originInput = document.getElementById('origin');
+            const destinationInput = document.getElementById('destination');
+
+            // Autocomplete para origem
+            originInput.addEventListener('input', (e) => {
+                handleAutocomplete(e.target.value, 'originSuggestions');
+            });
+
+            // Autocomplete para destino
+            destinationInput.addEventListener('input', (e) => {
+                handleAutocomplete(e.target.value, 'destinationSuggestions');
+            });
+
+            // Hide suggestions when clicking outside
+            document.addEventListener('click', (e) => {
+                if (!e.target.closest('.input-container')) {
+                    hideSuggestions();
+                }
+            });
+        }
+
+        async function handleAutocomplete(query, suggestionsId) {
+            if (query.length < 3) {
+                hideSuggestions();
+                return;
+            }
+
+            try {
+                // Usa o Geocoding Service como alternativa mais estável
+                const geocoder = new google.maps.Geocoder();
+                const request = {
+                    address: query,
+                    componentRestrictions: { country: 'BR' },
+                    region: 'br'
+                };
+
+                geocoder.geocode(request, (results, status) => {
+                    if (status === 'OK' && results) {
+                        // Converte resultados do Geocoder para formato similar ao Autocomplete
+                        const predictions = results.slice(0, 5).map(result => ({
+                            description: result.formatted_address,
+                            place_id: result.place_id
+                        }));
+                        showSuggestions(predictions, suggestionsId);
+                    } else {
+                        hideSuggestions();
+                    }
+                });
+            } catch (error) {
+                console.warn('Autocomplete não disponível:', error);
+                hideSuggestions();
+            }
+        }
+
+        function showSuggestions(predictions, suggestionsId) {
+            const suggestionsDiv = document.getElementById(suggestionsId);
+            suggestionsDiv.innerHTML = '';
+
+            predictions.forEach((prediction) => {
+                const item = document.createElement('div');
+                item.className = 'suggestion-item';
+                item.textContent = prediction.description;
+                item.onclick = () => {
+                    const inputId = suggestionsId.replace('Suggestions', '');
+                    document.getElementById(inputId).value = prediction.description;
+                    hideSuggestions();
+                };
+                suggestionsDiv.appendChild(item);
+            });
+
+            suggestionsDiv.style.display = 'block';
+        }
+
+        function hideSuggestions() {
+            document.getElementById('originSuggestions').style.display = 'none';
+            document.getElementById('destinationSuggestions').style.display = 'none';
+        }
+
+        function calculateRoute() {
+            const origin = document.getElementById('origin').value.trim();
+            const destination = document.getElementById('destination').value.trim();
+
+            if (!origin || !destination) {
+                updateStatus('error', 'Digite ambos os endereços');
+                return;
+            }
+
+            const routeButton = document.getElementById('routeButton');
+            routeButton.disabled = true;
+            routeButton.innerHTML = '<span class="loading"></span>Calculando rota...';
+
+            updateStatus('loading', 'Calculando melhor rota...');
+
+            const request = {
+                origin: origin,
+                destination: destination,
+                travelMode: google.maps.TravelMode.DRIVING,
+                unitSystem: google.maps.UnitSystem.METRIC,
+                region: 'br'
+            };
+
+            directionsService.route(request, (result, status) => {
+                routeButton.disabled = false;
+                routeButton.innerHTML = '🗺️ Calcular Rota';
+
+                if (status === 'OK') {
+                    processRouteResult(result);
+                } else {
+                    updateStatus('error', 'Não foi possível calcular a rota. Verifique os endereços.');
+                    console.error('Erro ao calcular rota:', status);
+                }
+            });
+        }
+
+        function processRouteResult(result) {
+            routeData = result;
+            directionsRenderer.setDirections(result);
+
+            // Obtém informações da rota
+            const route = result.routes[0];
+            const leg = route.legs[0];
+
+            // Atualiza informações da rota
+            document.getElementById('distance').textContent = leg.distance.text;
+            document.getElementById('duration').textContent = leg.duration.text;
+            document.getElementById('routeInfo').style.display = 'block';
+
+            // Cria pontos interpolados para animação suave
+            createInterpolatedPathFromRoute(route);
+
+            // Cria marcadores de início e fim
+            createRouteMarkers(leg.start_location, leg.end_location);
+
+            // Cria marcador do carro
+            createCarMarker(leg.start_location);
+
+            // Habilita controles de animação
+            document.getElementById('startButton').disabled = false;
+            document.getElementById('resetButton').disabled = false;
+
+            updateStatus('idle', 'Rota calculada! Pronto para animar.');
+            updateProgress(0);
+        }
+
+        function createInterpolatedPathFromRoute(route) {
+            interpolatedPath = [];
+            const path = route.overview_path;
+
+            for (let i = 0; i < path.length - 1; i++) {
+                const start = path[i];
+                const end = path[i + 1];
+                
+                // Adiciona pontos intermediários
+                const steps = 10;
+                for (let j = 0; j <= steps; j++) {
+                    const ratio = j / steps;
+                    const lat = start.lat() + (end.lat() - start.lat()) * ratio;
+                    const lng = start.lng() + (end.lng() - start.lng()) * ratio;
+                    interpolatedPath.push(new google.maps.LatLng(lat, lng));
+                }
+            }
+        }
+
+        function createRouteMarkers(startLocation, endLocation) {
+            // Remove marcadores anteriores
+            if (window.startMarker) window.startMarker.setMap(null);
+            if (window.endMarker) window.endMarker.setMap(null);
+
+            // Marcador de início
+            window.startMarker = new google.maps.Marker({
+                position: startLocation,
+                map: map,
+                icon: {
+                    url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(`
+                        <svg width="24" height="24" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                            <circle cx="12" cy="12" r="10" fill="#00d4aa" stroke="white" stroke-width="2"/>
+                            <text x="12" y="16" text-anchor="middle" fill="white" font-size="12" font-weight="bold">A</text>
+                        </svg>
+                    `),
+                    scaledSize: new google.maps.Size(24, 24),
+                    anchor: new google.maps.Point(12, 12)
+                },
+                title: "Origem"
+            });
+
+            // Marcador de fim
+            window.endMarker = new google.maps.Marker({
+                position: endLocation,
+                map: map,
+                icon: {
+                    url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(`
+                        <svg width="24" height="24" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                            <circle cx="12" cy="12" r="10" fill="#e74c3c" stroke="white" stroke-width="2"/>
+                            <text x="12" y="16" text-anchor="middle" fill="white" font-size="12" font-weight="bold">B</text>
+                        </svg>
+                    `),
+                    scaledSize: new google.maps.Size(24, 24),
+                    anchor: new google.maps.Point(12, 12)
+                },
+                title: "Destino"
+            });
+        }
+
+        function createCarMarker(position) {
+            if (marker) marker.setMap(null);
+
+            marker = new google.maps.Marker({
+                position: position,
+                map: map,
+                icon: {
+                    url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(`
+                        <svg width="32" height="32" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg">
+                            <circle cx="16" cy="16" r="14" fill="white" stroke="#ddd" stroke-width="2"/>
+                            <circle cx="16" cy="16" r="10" fill="#2c3e50"/>
+                            <polygon points="16,8 20,14 12,14" fill="white"/>
+                        </svg>
+                    `),
+                    scaledSize: new google.maps.Size(32, 32),
+                    anchor: new google.maps.Point(16, 16)
+                },
+                title: "Veículo",
+                zIndex: 1000
+            });
+        }
+
+        function startAnimation() {
+            if (isAnimating || !interpolatedPath.length) return;
+            
+            isAnimating = true;
+            pathIndex = 0;
+            
+            document.getElementById('startButton').disabled = true;
+            document.getElementById('stopButton').disabled = false;
+            
+            updateStatus('running', 'Em movimento...');
+            
+            animationInterval = setInterval(animateMarker, animationSpeed);
+        }
+
+        function stopAnimation() {
+            if (!isAnimating) return;
+            
+            isAnimating = false;
+            clearInterval(animationInterval);
+            
+            document.getElementById('startButton').disabled = false;
+            document.getElementById('stopButton').disabled = true;
+            
+            updateStatus('idle', 'Animação pausada');
+        }
+
+        function resetAnimation() {
+            stopAnimation();
+            if (interpolatedPath.length > 0) {
+                pathIndex = 0;
+                marker.setPosition(interpolatedPath[0]);
+                map.panTo(interpolatedPath[0]);
+                updateStatus('idle', 'Pronto para animar');
+                updateProgress(0);
+            }
+        }
+
+        function animateMarker() {
+            if (pathIndex < interpolatedPath.length) {
+                const currentPoint = interpolatedPath[pathIndex];
+                
+                marker.setPosition(currentPoint);
+                
+                if (pathIndex % 10 === 0) {
+                    map.panTo(currentPoint);
+                }
+                
+                const progress = Math.round((pathIndex / interpolatedPath.length) * 100);
+                updateProgress(progress);
+                
+                pathIndex++;
+            } else {
+                stopAnimation();
+                updateStatus('completed', 'Destino alcançado! 🎉');
+                updateProgress(100);
+            }
+        }
+
+        function updateSpeed() {
+            const slider = document.getElementById('speedSlider');
+            animationSpeed = 210 - parseInt(slider.value);
+            
+            if (isAnimating) {
+                clearInterval(animationInterval);
+                animationInterval = setInterval(animateMarker, animationSpeed);
+            }
+        }
+
+        function updateStatus(type, message) {
+            const status = document.getElementById('status');
+            status.className = `status ${type}`;
+            status.textContent = message;
+        }
+
+        function updateProgress(percent) {
+            document.getElementById('progress').textContent = `${percent}%`;
+        }
+    </script>
+
+    <!-- API do Google Maps com sua chave válida -->
+    <script>
+        // Função para carregar a API do Google Maps de forma otimizada
+        (g=>{var h,a,k,p="The Google Maps JavaScript API",c="google",l="importLibrary",q="__ib__",m=document,b=window;b=b[c]||(b[c]={});var d=b.maps||(b.maps={}),r=new Set,e=new URLSearchParams,u=()=>h||(h=new Promise(async(f,n)=>{await (a=m.createElement("script"));e.set("libraries",[...r]+"");for(k in g)e.set(k.replace(/[A-Z]/g,t=>"_"+t[0].toLowerCase()),g[k]);e.set("callback",c+".maps."+q);a.src=`https://maps.${c}apis.com/maps/api/js?`+e;d[q]=f;a.onerror=()=>h=n(Error(p+" could not load."));a.nonce=m.querySelector("script[nonce]")?.nonce||"";m.head.append(a)}));d[l]?console.warn(p+" only loads once. Ignoring:",g):d[l]=(f,...n)=>r.add(f)&&u().then(()=>d[l](f,...n))})({
+            key: "AIzaSyCFUIkhN_hx7LhwlRWnqj_uaq4KejUSBBs",
+            v: "weekly",
+            libraries: ["places"]
+        });
+    </script>
+    <script>
+        // Inicializa o mapa quando a API carregar
+        google.maps.importLibrary("maps").then(() => {
+            initMap();
+        });
+    </script>
+</body>
+</html>
