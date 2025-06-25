@@ -16,21 +16,14 @@ const speedRangeInput = document.getElementById('speedRange');
 const speedValueSpan = document.getElementById('speedValue');
 
 // Atraso base da animação (para velocidade "Normal" ou 1x)
-// Um valor menor significa uma animação mais rápida.
-const BASE_ANIMATION_DELAY = 50; // milissegundos (velocidade "Normal")
+const BASE_ANIMATION_DELAY = 50; // milissegundos
 
 /**
  * Calcula o delay da animação com base no valor do slider.
- * Slider min=1 (1x velocidade) a max=100 (100x velocidade).
- * O delay real será BASE_ANIMATION_DELAY / sliderValue.
  * @param {number} sliderValue - Valor do slider (1 a 100).
  * @returns {number} Delay em milissegundos.
  */
 function getAnimationDelay(sliderValue) {
-    // Para evitar divisão por zero se min fosse 0, e para fazer 1x ser o padrão.
-    // Quanto maior o sliderValue, menor o delay, e mais rápida a animação.
-    // Ex: sliderValue=1 -> delay=50ms (Normal)
-    // Ex: sliderValue=100 -> delay=0.5ms (100x mais rápido)
     return BASE_ANIMATION_DELAY / sliderValue;
 }
 
@@ -40,7 +33,6 @@ function getAnimationDelay(sliderValue) {
  * @param {string} message - Mensagem a ser exibida.
  */
 function updateStatus(type, message) {
-    // Remove todas as classes de status e adiciona a correta do Bootstrap
     statusDiv.className = `status alert ${type === 'idle' ? 'alert-success' : type === 'loading' ? 'alert-warning' : 'alert-danger'}`;
     statusDiv.textContent = message;
 }
@@ -58,6 +50,9 @@ function initMap() {
         }
 
         map = new google.maps.Map(mapElement, {
+            // **IMPORTANTE: Substitua 'YOUR_MAP_ID' pelo ID do Mapa que você criar no Google Cloud Console.**
+            // Para mais informações, veja: https://developers.google.com/maps/documentation/javascript/cloud-customization#map_id
+            mapId: "YOUR_MAP_ID", 
             zoom: 12,
             center: { lat: -22.5211, lng: -41.9577 }, // Centro inicial (Rio das Ostras, Brasil)
             mapTypeId: 'roadmap',
@@ -76,17 +71,35 @@ function initMap() {
         });
         directionsRenderer.setMap(map);
 
-        // Ícone do carro personalizado
-        // ATENÇÃO: Você precisa ter um arquivo 'car_icon.png' na pasta 'static/images/'
-        const carIcon = {
-            url: "{{ url_for('static', filename='images/car_icon.png') }}", // Caminho para o ícone do carro
-            scaledSize: new google.maps.Size(35, 35),
-            anchor: new google.maps.Point(17, 17) // Centraliza o ícone
-        };
-        marker = new google.maps.Marker({
-            map: map,
-            icon: carIcon,
-            visible: false // Esconde o marcador até a rota ser carregada
+        // **ATUALIZAÇÃO: Usando google.maps.marker.AdvancedMarkerElement**
+        // Por padrão, usaremos um glifo (emoji de carro).
+        // Se você tiver um arquivo 'car_icon.png' na pasta 'static/images/' e quiser usá-lo,
+        // você pode descomentar a seção de 'carIconElement' e passá-lo para 'content'.
+        
+        // Opção 1: Usar glifo (emoji) - Mais simples e não depende de arquivo de imagem.
+        const markerContent = new google.maps.marker.PinElement({
+            glyph: '🚗',
+            background: '#FFD700', // Amarelo
+            borderColor: '#FFD700',
+            glyphColor: '#FFFFFF', // Branco
+        }).element;
+
+        // Opção 2: Usar imagem personalizada (descomente e use se tiver 'car_icon.png' e quiser priorizar)
+        /*
+        const carIconElement = document.createElement('img');
+        carIconElement.src = "{{ url_for('static', filename='images/car_icon.png') }}"; 
+        carIconElement.style.width = '35px';
+        carIconElement.style.height = '35px';
+        carIconElement.style.objectFit = 'contain';
+        const markerContent = carIconElement;
+        */
+
+        marker = new google.maps.marker.AdvancedMarkerElement({
+            map: null, // Inicializa escondido, sem mapa associado.
+            position: { lat: -22.5211, lng: -41.9577 }, // Posição inicial, será atualizada
+            content: markerContent,
+            // 'visible' não é uma propriedade direta do AdvancedMarkerElement.
+            // Para controlar a visibilidade, defina 'map' para null ou a instância do mapa.
         });
 
         console.log('✅ Mapa inicializado com sucesso!');
@@ -110,7 +123,6 @@ function setupEventListeners() {
     resetButton.addEventListener('click', resetMap);
     speedRangeInput.addEventListener('input', () => {
         updateSpeedDisplay();
-        // Se a animação estiver rodando, reinicia com a nova velocidade para aplicar o delay
         if (animationInterval) {
             clearInterval(animationInterval);
             startAnimation();
@@ -123,7 +135,7 @@ function setupEventListeners() {
  */
 function updateSpeedDisplay() {
     const value = parseInt(speedRangeInput.value);
-    speedValueSpan.textContent = `${value}x Velocidade`; // Exibe o multiplicador de velocidade
+    speedValueSpan.textContent = `${value}x Velocidade`;
 }
 
 
@@ -131,32 +143,31 @@ function updateSpeedDisplay() {
  * Configura o autocomplete para os campos de endereço, permitindo buscar por nome de local.
  */
 function setupAutocompletes() {
-    // Autocomplete para origem
+    // ATENÇÃO: google.maps.places.Autocomplete está depreciado para novos clientes a partir de Março de 2025.
+    // A recomendação é usar google.maps.places.PlaceAutocompleteElement.
+    // Para migrar, você precisaria alterar a estrutura HTML do seu input para usar o novo elemento customizado.
+    // Mais informações: https://developers.google.com/maps/legacy e https://developers.google.com/maps/documentation/javascript/places-migration-overview
+    // Por enquanto, mantemos o Autocomplete, pois ainda funciona para clientes existentes.
     const originAutocomplete = new google.maps.places.Autocomplete(originInput, {
-        types: ['geocode', 'establishment'], // Permite endereços e nomes de estabelecimentos/locais
-        componentRestrictions: { 'country': ['br'] } // Restringe para o Brasil
-    });
-
-    // Autocomplete para destino
-    const destinationAutocomplete = new google.maps.places.Autocomplete(destinationInput, {
-        types: ['geocode', 'establishment'], // Permite endereços e nomes de estabelecimentos/locais
+        types: ['geocode', 'establishment'],
         componentRestrictions: { 'country': ['br'] }
     });
 
-    // Opcional: listener para quando o usuário seleciona uma sugestão
+    const destinationAutocomplete = new google.maps.places.Autocomplete(destinationInput, {
+        types: ['geocode', 'establishment'],
+        componentRestrictions: { 'country': ['br'] }
+    });
+
     originAutocomplete.addListener('place_changed', () => {
         const place = originAutocomplete.getPlace();
         if (place.geometry) {
             console.log('Origem selecionada:', place.formatted_address);
-            // Opcional: Centralizar mapa na origem ou destino se não houver rota
-            // map.setCenter(place.geometry.location);
         }
     });
     destinationAutocomplete.addListener('place_changed', () => {
         const place = destinationAutocomplete.getPlace();
         if (place.geometry) {
             console.log('Destino selecionada:', place.formatted_address);
-            // map.setCenter(place.geometry.location);
         }
     });
 }
@@ -166,7 +177,7 @@ function setupAutocompletes() {
  */
 async function calculateRoute() {
     updateStatus('loading', '🔍 Calculando rota...');
-    routeDetailsDiv.style.display = 'none'; // Esconde detalhes antigos
+    routeDetailsDiv.style.display = 'none';
 
     const origin = originInput.value.trim();
     const destination = destinationInput.value.trim();
@@ -205,21 +216,19 @@ async function calculateRoute() {
  */
 function processRoute(routeData) {
     if (animationInterval) {
-        clearInterval(animationInterval); // Para qualquer animação anterior
+        clearInterval(animationInterval);
     }
     currentPathIndex = 0;
-    marker.setVisible(false); // Esconde o marcador antes de iniciar a nova animação
+    marker.map = null; // Esconde o marcador antes de iniciar a nova animação
     directionsRenderer.setDirections({ routes: [] }); // Limpa a rota anterior no mapa
 
     try {
-        // Decodificar a polilinha recebida do backend
         routePath = google.maps.geometry.encoding.decodePath(routeData.points);
 
         if (routePath.length === 0) {
             throw new Error("Nenhum ponto de rota foi retornado.");
         }
 
-        // Exibir a rota no mapa
         const newRoute = {
             routes: [{
                 overview_polyline: { points: routeData.points },
@@ -231,17 +240,15 @@ function processRoute(routeData) {
         };
         directionsRenderer.setDirections(newRoute);
 
-        // Exibir detalhes da rota
         routeDetailsDiv.innerHTML = `
             <p><strong>Distância:</strong> ${routeData.distance}</p>
             <p><strong>Duração Estimada:</strong> ${routeData.duration}</p>
         `;
         routeDetailsDiv.style.display = 'block';
 
-        // Posicionar o marcador no início da rota e torná-lo visível
-        marker.setPosition(routePath[0]);
-        marker.setVisible(true);
-        map.setCenter(routePath[0]); // Centraliza o mapa no início da rota
+        marker.position = routePath[0];
+        marker.map = map; // Exibe o marcador, associando-o ao mapa
+        map.setCenter(routePath[0]);
 
         updateStatus('idle', '✅ Rota calculada! Iniciando animação...');
         startAnimation();
@@ -264,17 +271,13 @@ function startAnimation() {
         if (currentPathIndex < routePath.length - 1) {
             currentPathIndex++;
             const nextPosition = routePath[currentPathIndex];
-            marker.setPosition(nextPosition);
-            map.panTo(nextPosition); // Suaviza o movimento do mapa para seguir o carro
-            // Opcional: rotacionar o ícone do carro na direção do movimento
-            // Este é um recurso mais avançado e requer uma abordagem diferente (ex: Custom Overlay ou SVG dinâmico)
-            // pois a propriedade 'rotation' não existe diretamente para Marker icons estáticos.
-            // Se o ícone tiver direção fixa, não é necessário.
+            marker.position = nextPosition;
+            map.panTo(nextPosition);
         } else {
             clearInterval(animationInterval);
             updateStatus('idle', '🏁 Animação concluída!');
         }
-    }, animationDelay); // Usar o delay calculado dinamicamente
+    }, animationDelay);
 }
 
 /**
@@ -284,17 +287,14 @@ function resetMap() {
     if (animationInterval) {
         clearInterval(animationInterval);
     }
-    directionsRenderer.setDirections({ routes: [] }); // Limpa a rota
-    marker.setVisible(false); // Esconde o marcador
+    directionsRenderer.setDirections({ routes: [] });
+    marker.map = null; // Esconde o marcador
     currentPathIndex = 0;
     routePath = [];
     originInput.value = '';
     destinationInput.value = '';
     routeDetailsDiv.style.display = 'none';
     updateStatus('idle', 'Mapa resetado. Pronto para uma nova rota!');
-    map.setCenter({ lat: -22.5211, lng: -41.9577 }); // Volta para o centro inicial
+    map.setCenter({ lat: -22.5211, lng: -41.9577 });
     map.setZoom(12);
 }
-
-// Garante que o mapa seja inicializado quando a página carregar
-// A função initMap é chamada diretamente pela API do Google Maps via callback=initMap

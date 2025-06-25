@@ -12,41 +12,45 @@
         <h1>Animação de Rota - Estilo Uber</h1>
     </div>
 
-    <div class="container my-4"> <div class="control-panel card p-4 shadow-sm"> <h3 class="mb-3">🚗 Rota e Animação</h3>
-            <p class="description text-muted">
-                Digite os endereços ou nomes de locais de origem e destino para simular a locomoção de um carro no mapa.
-                Use o botão "Resetar" para limpar o mapa.
-            </p>
-            <div class="mb-3">
-                <label for="origin" class="form-label">Origem:</label>
-                <input type="text" id="origin" class="form-control address-input" placeholder="Ex: Av. Paulista, 1000, São Paulo - SP ou Museu do Ipiranga" autocomplete="off">
-            </div>
-            <div class="mb-3">
-                <label for="destination" class="form-label">Destino:</label>
-                <input type="text" id="destination" class="form-control address-input" placeholder="Ex: Rua Augusta, 2000, São Paulo - SP ou Parque Ibirapuera" autocomplete="off">
-            </div>
-            <div class="d-grid gap-2 mb-3"> <button id="routeButton" class="btn btn-primary btn-lg route-button">🗺️ Calcular Rota</button>
-                <button id="resetButton" class="btn btn-danger btn-sm reset-button">🔄 Resetar</button>
-            </div>
-
-            <div class="speed-control-group mb-3">
-                <label for="speedRange" class="form-label">Velocidade da Animação:</label>
-                <input type="range" id="speedRange" class="form-range" min="1" max="100" value="1">
-                <span id="speedValue" class="text-muted text-center d-block">Normal (1x)</span>
-            </div>
-
-            <div id="route-details" class="alert alert-info" style="display:none;">
+    <div class="container-fluid flex-grow-1 d-flex flex-column flex-md-row p-0">
+        <div class="col-md-4 col-lg-3 p-3 d-flex order-md-1">
+            <div class="control-panel card p-4 shadow-sm h-100 w-100 d-flex flex-column">
+                <h3 class="mb-3">🚗 Rota e Animação</h3>
+                <p class="description text-muted">
+                    Digite os endereços ou nomes de locais de origem e destino para simular a locomoção de um carro no mapa.
+                    Use o botão "Resetar" para limpar o mapa.
+                </p>
+                <div class="mb-3">
+                    <label for="origin" class="form-label">Origem:</label>
+                    <input type="text" id="origin" class="form-control address-input" placeholder="Ex: Av. Paulista, 1000, São Paulo - SP ou Museu do Ipiranga" autocomplete="off">
                 </div>
-            <div id="status" class="status alert alert-success">🗺️ Mapa carregado! Digite os endereços.</div>
+                <div class="mb-3">
+                    <label for="destination" class="form-label">Destino:</label>
+                    <input type="text" id="destination" class="form-control address-input" placeholder="Ex: Rua Augusta, 2000, São Paulo - SP ou Parque Ibirapuera" autocomplete="off">
+                </div>
+                <div class="d-grid gap-2 mb-3">
+                    <button id="routeButton" class="btn btn-primary btn-lg route-button">🗺️ Calcular Rota</button>
+                    <button id="resetButton" class="btn btn-danger btn-sm reset-button">🔄 Resetar</button>
+                </div>
+
+                <div class="speed-control-group mb-3">
+                    <label for="speedRange" class="form-label">Velocidade da Animação:</label>
+                    <input type="range" id="speedRange" class="form-range" min="1" max="100" value="1">
+                    <span id="speedValue" class="text-muted text-center d-block">Normal (1x)</span>
+                </div>
+
+                <div id="route-details" class="alert alert-info" style="display:none;"></div>
+                <div id="status" class="status alert alert-success mt-auto">🗺️ Mapa carregado! Digite os endereços.</div>
+            </div>
+        </div>
+
+        <div class="col-md-8 col-lg-9 p-3 d-flex order-md-2">
+            <div id="map" class="w-100 h-100"></div>
         </div>
     </div>
 
-    <div class="map-container flex-grow-1">
-        <div id="map"></div>
-    </div>
-
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
-    <script src="https://maps.googleapis.com/maps/api/js?key={{ Maps_api_key }}&libraries=places&callback=initMap" async defer></script>
+    <script src="https://maps.googleapis.com/maps/api/js?key={{ Maps_api_key }}&libraries=places,marker&callback=initMap" async defer></script>
     <script src="{{ url_for('static', filename='js/maps.js') }}"></script>
 </body>
 </html>
