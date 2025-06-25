@@ -7,15 +7,9 @@ services:
     buildCommand: pip install -r requirements.txt
     startCommand: gunicorn app:app
     envVars:
-      - key: PYTHON_VERSION
-        value: 3.11.0
+      - key: Maps_API_KEY # Chave da API do Google Maps (manter segura!)
+        sync: false # Importante: não sincronizar com o Git, configurar diretamente no Render
       - key: FLASK_ENV
         value: production
       - key: SECRET_KEY
-        generateValue: true
-    healthCheckPath: /health
-    autoDeploy: true
-    disk:
-      name: app-disk
-      size: 1GB
-      mountPath: /opt/render/project/src
+        generateValue: true # Gerar uma chave secreta automaticamente

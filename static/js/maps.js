@@ -1,44 +1,73 @@
-// Variáveis globais
 let map;
-let marker;
-let directionsService;
 let directionsRenderer;
-let interpolatedPath = [];
-let pathIndex = 0;
+let marker;
 let animationInterval;
-let isAnimating = false;
-let animationSpeed = 80;
+let currentPathIndex = 0;
+let routePath = []; // Para armazenar os pontos da rota decodificados
 
-console.log('🚀 Carregando map.js...');
+// Elementos do DOM
+const originInput = document.getElementById('origin');
+const destinationInput = document.getElementById('destination');
+const routeButton = document.getElementById('routeButton');
+const resetButton = document.getElementById('resetButton');
+const statusDiv = document.getElementById('status');
+const routeDetailsDiv = document.getElementById('route-details');
+const speedRangeInput = document.getElementById('speedRange');
+const speedValueSpan = document.getElementById('speedValue');
+
+// Atraso base da animação (para velocidade "Normal" ou 1x)
+// Um valor menor significa uma animação mais rápida.
+const BASE_ANIMATION_DELAY = 50; // milissegundos (velocidade "Normal")
 
 /**
- * Inicializa o mapa - função chamada pela API do Google Maps
+ * Calcula o delay da animação com base no valor do slider.
+ * Slider min=1 (1x velocidade) a max=100 (100x velocidade).
+ * O delay real será BASE_ANIMATION_DELAY / sliderValue.
+ * @param {number} sliderValue - Valor do slider (1 a 100).
+ * @returns {number} Delay em milissegundos.
+ */
+function getAnimationDelay(sliderValue) {
+    // Para evitar divisão por zero se min fosse 0, e para fazer 1x ser o padrão.
+    // Quanto maior o sliderValue, menor o delay, e mais rápida a animação.
+    // Ex: sliderValue=1 -> delay=50ms (Normal)
+    // Ex: sliderValue=100 -> delay=0.5ms (100x mais rápido)
+    return BASE_ANIMATION_DELAY / sliderValue;
+}
+
+/**
+ * Atualiza a mensagem de status para o usuário e as classes de estilo.
+ * @param {string} type - Tipo de status (idle, loading, error).
+ * @param {string} message - Mensagem a ser exibida.
+ */
+function updateStatus(type, message) {
+    // Remove todas as classes de status e adiciona a correta do Bootstrap
+    statusDiv.className = `status alert ${type === 'idle' ? 'alert-success' : type === 'loading' ? 'alert-warning' : 'alert-danger'}`;
+    statusDiv.textContent = message;
+}
+
+/**
+ * Inicializa o mapa - função chamada pela API do Google Maps.
  */
 function initMap() {
     console.log('🗺️ Inicializando mapa...');
     
     try {
-        // Verificar se elemento mapa existe
         const mapElement = document.getElementById("map");
         if (!mapElement) {
-            console.error('❌ Elemento mapa não encontrado');
-            return;
+            throw new Error("Elemento do mapa (#map) não encontrado no DOM.");
         }
 
-        // Criar mapa
         map = new google.maps.Map(mapElement, {
             zoom: 12,
-            center: { lat: -22.5211, lng: -41.9577 }, // Rio das Ostras
+            center: { lat: -22.5211, lng: -41.9577 }, // Centro inicial (Rio das Ostras, Brasil)
             mapTypeId: 'roadmap',
             mapTypeControl: true,
             streetViewControl: true,
             fullscreenControl: true
         });
 
-        // Inicializar serviços
-        directionsService = new google.maps.DirectionsService();
         directionsRenderer = new google.maps.DirectionsRenderer({
-            suppressMarkers: true,
+            suppressMarkers: true, // Suprime os marcadores padrão da Directions API
             polylineOptions: {
                 strokeColor: "#00d4aa",
                 strokeOpacity: 1.0,
@@ -47,11 +76,25 @@ function initMap() {
         });
         directionsRenderer.setMap(map);
 
+        // Ícone do carro personalizado
+        // ATENÇÃO: Você precisa ter um arquivo 'car_icon.png' na pasta 'static/images/'
+        const carIcon = {
+            url: "{{ url_for('static', filename='images/car_icon.png') }}", // Caminho para o ícone do carro
+            scaledSize: new google.maps.Size(35, 35),
+            anchor: new google.maps.Point(17, 17) // Centraliza o ícone
+        };
+        marker = new google.maps.Marker({
+            map: map,
+            icon: carIcon,
+            visible: false // Esconde o marcador até a rota ser carregada
+        });
+
         console.log('✅ Mapa inicializado com sucesso!');
         updateStatus('idle', '🗺️ Mapa carregado! Digite os endereços.');
         
-        // Configurar eventos após mapa carregado
         setupEventListeners();
+        setupAutocompletes();
+        updateSpeedDisplay(); // Atualiza o display da velocidade inicial
         
     } catch (error) {
         console.error('❌ Erro ao inicializar mapa:', error);
@@ -60,348 +103,198 @@ function initMap() {
 }
 
 /**
- * Calcula rota entre dois pontos
+ * Configura os listeners de eventos para os botões e slider.
  */
-function calculateRoute() {
-    console.log('🔍 Calculando rota...');
-    
-    const originInput = document.getElementById('origin');
-    const destinationInput = document.getElementById('destination');
-    
-    if (!originInput || !destinationInput) {
-        console.error('❌ Campos de input não encontrados');
-        updateStatus('error', '❌ Erro: campos não encontrados');
-        return;
-    }
-    
+function setupEventListeners() {
+    routeButton.addEventListener('click', calculateRoute);
+    resetButton.addEventListener('click', resetMap);
+    speedRangeInput.addEventListener('input', () => {
+        updateSpeedDisplay();
+        // Se a animação estiver rodando, reinicia com a nova velocidade para aplicar o delay
+        if (animationInterval) {
+            clearInterval(animationInterval);
+            startAnimation();
+        }
+    });
+}
+
+/**
+ * Atualiza o texto que exibe o valor da velocidade do slider.
+ */
+function updateSpeedDisplay() {
+    const value = parseInt(speedRangeInput.value);
+    speedValueSpan.textContent = `${value}x Velocidade`; // Exibe o multiplicador de velocidade
+}
+
+
+/**
+ * Configura o autocomplete para os campos de endereço, permitindo buscar por nome de local.
+ */
+function setupAutocompletes() {
+    // Autocomplete para origem
+    const originAutocomplete = new google.maps.places.Autocomplete(originInput, {
+        types: ['geocode', 'establishment'], // Permite endereços e nomes de estabelecimentos/locais
+        componentRestrictions: { 'country': ['br'] } // Restringe para o Brasil
+    });
+
+    // Autocomplete para destino
+    const destinationAutocomplete = new google.maps.places.Autocomplete(destinationInput, {
+        types: ['geocode', 'establishment'], // Permite endereços e nomes de estabelecimentos/locais
+        componentRestrictions: { 'country': ['br'] }
+    });
+
+    // Opcional: listener para quando o usuário seleciona uma sugestão
+    originAutocomplete.addListener('place_changed', () => {
+        const place = originAutocomplete.getPlace();
+        if (place.geometry) {
+            console.log('Origem selecionada:', place.formatted_address);
+            // Opcional: Centralizar mapa na origem ou destino se não houver rota
+            // map.setCenter(place.geometry.location);
+        }
+    });
+    destinationAutocomplete.addListener('place_changed', () => {
+        const place = destinationAutocomplete.getPlace();
+        if (place.geometry) {
+            console.log('Destino selecionada:', place.formatted_address);
+            // map.setCenter(place.geometry.location);
+        }
+    });
+}
+
+/**
+ * Calcula rota entre dois pontos usando o backend.
+ */
+async function calculateRoute() {
+    updateStatus('loading', '🔍 Calculando rota...');
+    routeDetailsDiv.style.display = 'none'; // Esconde detalhes antigos
+
     const origin = originInput.value.trim();
     const destination = destinationInput.value.trim();
 
     if (!origin || !destination) {
-        updateStatus('error', '⚠️ Digite ambos os endereços');
+        updateStatus('error', 'Por favor, preencha os endereços de origem e destino.');
         return;
     }
 
-    // Botão loading
-    const button = document.getElementById('routeButton');
-    if (button) {
-        button.disabled = true;
-        button.textContent = '🔄 Calculando...';
+    try {
+        const response = await fetch('/calculate_route_backend', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ origin, destination })
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+            throw new Error(data.error || 'Erro desconhecido ao calcular rota no backend.');
+        }
+
+        processRoute(data);
+
+    } catch (error) {
+        console.error('❌ Erro ao calcular rota:', error);
+        updateStatus('error', '❌ Erro: ' + error.message);
     }
-
-    updateStatus('loading', '🔍 Calculando rota...');
-
-    const request = {
-        origin: origin,
-        destination: destination,
-        travelMode: google.maps.TravelMode.DRIVING,
-        unitSystem: google.maps.UnitSystem.METRIC,
-        region: 'br'
-    };
-
-    directionsService.route(request, (result, status) => {
-        // Restaurar botão
-        if (button) {
-            button.disabled = false;
-            button.textContent = '🗺️ Calcular Rota';
-        }
-
-        if (status === 'OK') {
-            processRoute(result);
-        } else {
-            console.error('❌ Erro na rota:', status);
-            updateStatus('error', '❌ Erro ao calcular rota: ' + status);
-        }
-    });
 }
 
 /**
- * Processa resultado da rota
+ * Processa a rota recebida do backend (decodifica polilinha e inicia animação).
+ * @param {object} routeData - Dados da rota contendo 'points' (polilinha codificada), 'distance', 'duration'.
  */
-function processRoute(result) {
-    console.log('📍 Processando rota...');
-    
-    directionsRenderer.setDirections(result);
-    
-    const route = result.routes[0];
-    const leg = route.legs[0];
-    
-    // Atualizar informações
-    updateRouteInfo(leg);
-    
-    // Criar pontos para animação
-    createAnimationPath(route);
-    
-    // Criar marcadores
-    createMarkers(leg);
-    
-    // Habilitar controles
-    enableControls();
-    
-    updateStatus('completed', '✅ Rota calculada! Clique em Iniciar.');
-}
-
-/**
- * Atualiza informações da rota
- */
-function updateRouteInfo(leg) {
-    const distanceEl = document.getElementById('distance');
-    const durationEl = document.getElementById('duration');
-    const routeInfoEl = document.getElementById('routeInfo');
-    
-    if (distanceEl) distanceEl.textContent = leg.distance.text;
-    if (durationEl) durationEl.textContent = leg.duration.text;
-    if (routeInfoEl) routeInfoEl.style.display = 'block';
-}
-
-/**
- * Cria caminho para animação
- */
-function createAnimationPath(route) {
-    interpolatedPath = [];
-    const path = route.overview_path;
-    
-    // Adicionar pontos interpolados
-    for (let i = 0; i < path.length - 1; i++) {
-        const start = path[i];
-        const end = path[i + 1];
-        
-        // 10 pontos entre cada par
-        for (let j = 0; j <= 10; j++) {
-            const ratio = j / 10;
-            const lat = start.lat() + (end.lat() - start.lat()) * ratio;
-            const lng = start.lng() + (end.lng() - start.lng()) * ratio;
-            interpolatedPath.push(new google.maps.LatLng(lat, lng));
-        }
+function processRoute(routeData) {
+    if (animationInterval) {
+        clearInterval(animationInterval); // Para qualquer animação anterior
     }
-    
-    console.log(`📈 Criados ${interpolatedPath.length} pontos para animação`);
-}
+    currentPathIndex = 0;
+    marker.setVisible(false); // Esconde o marcador antes de iniciar a nova animação
+    directionsRenderer.setDirections({ routes: [] }); // Limpa a rota anterior no mapa
 
-/**
- * Cria marcadores de início e fim
- */
-function createMarkers(leg) {
-    // Marcador de carro
-    if (marker) marker.setMap(null);
-    
-    marker = new google.maps.Marker({
-        position: leg.start_location,
-        map: map,
-        title: "🚗 Veículo",
-        icon: {
-            path: google.maps.SymbolPath.CIRCLE,
-            scale: 8,
-            fillColor: '#2c3e50',
-            fillOpacity: 1,
-            strokeColor: 'white',
-            strokeWeight: 2
+    try {
+        // Decodificar a polilinha recebida do backend
+        routePath = google.maps.geometry.encoding.decodePath(routeData.points);
+
+        if (routePath.length === 0) {
+            throw new Error("Nenhum ponto de rota foi retornado.");
         }
-    });
+
+        // Exibir a rota no mapa
+        const newRoute = {
+            routes: [{
+                overview_polyline: { points: routeData.points },
+                legs: [{
+                    distance: { text: routeData.distance },
+                    duration: { text: routeData.duration }
+                }]
+            }]
+        };
+        directionsRenderer.setDirections(newRoute);
+
+        // Exibir detalhes da rota
+        routeDetailsDiv.innerHTML = `
+            <p><strong>Distância:</strong> ${routeData.distance}</p>
+            <p><strong>Duração Estimada:</strong> ${routeData.duration}</p>
+        `;
+        routeDetailsDiv.style.display = 'block';
+
+        // Posicionar o marcador no início da rota e torná-lo visível
+        marker.setPosition(routePath[0]);
+        marker.setVisible(true);
+        map.setCenter(routePath[0]); // Centraliza o mapa no início da rota
+
+        updateStatus('idle', '✅ Rota calculada! Iniciando animação...');
+        startAnimation();
+
+    } catch (error) {
+        console.error('❌ Erro ao processar rota:', error);
+        updateStatus('error', '❌ Erro ao exibir rota: ' + error.message);
+        routeDetailsDiv.style.display = 'none';
+    }
 }
 
 /**
- * Habilita controles de animação
- */
-function enableControls() {
-    const startBtn = document.getElementById('startButton');
-    const resetBtn = document.getElementById('resetButton');
-    
-    if (startBtn) startBtn.disabled = false;
-    if (resetBtn) resetBtn.disabled = false;
-}
-
-/**
- * Inicia animação
+ * Inicia a animação do marcador ao longo da rota.
  */
 function startAnimation() {
-    if (isAnimating || !interpolatedPath.length) {
-        if (!interpolatedPath.length) {
-            updateStatus('error', '⚠️ Calcule uma rota primeiro!');
-        }
-        return;
-    }
-    
-    console.log('▶️ Iniciando animação...');
-    
-    isAnimating = true;
-    pathIndex = 0;
-    
-    // Atualizar botões
-    const startBtn = document.getElementById('startButton');
-    const stopBtn = document.getElementById('stopButton');
-    
-    if (startBtn) startBtn.disabled = true;
-    if (stopBtn) stopBtn.disabled = false;
-    
-    updateStatus('running', '🚗 Veículo em movimento...');
-    
-    // Iniciar animação
-    animationInterval = setInterval(animateMarker, animationSpeed);
-}
+    const animationDelay = getAnimationDelay(parseInt(speedRangeInput.value));
+    console.log(`Iniciando animação com delay de: ${animationDelay}ms`);
 
-/**
- * Para animação
- */
-function stopAnimation() {
-    if (!isAnimating) return;
-    
-    console.log('⏸️ Parando animação...');
-    
-    isAnimating = false;
-    clearInterval(animationInterval);
-    
-    // Atualizar botões
-    const startBtn = document.getElementById('startButton');
-    const stopBtn = document.getElementById('stopButton');
-    
-    if (startBtn) startBtn.disabled = false;
-    if (stopBtn) stopBtn.disabled = true;
-    
-    updateStatus('idle', '⏸️ Animação pausada');
-}
-
-/**
- * Reseta animação
- */
-function resetAnimation() {
-    console.log('🔄 Resetando animação...');
-    
-    stopAnimation();
-    
-    if (interpolatedPath.length > 0) {
-        pathIndex = 0;
-        marker.setPosition(interpolatedPath[0]);
-        map.panTo(interpolatedPath[0]);
-        updateProgress(0);
-        updateStatus('idle', '🔄 Pronto para iniciar!');
-    }
-}
-
-/**
- * Anima marcador
- */
-function animateMarker() {
-    if (pathIndex < interpolatedPath.length) {
-        const currentPoint = interpolatedPath[pathIndex];
-        
-        // Mover marcador
-        marker.setPosition(currentPoint);
-        
-        // Seguir com câmera ocasionalmente
-        if (pathIndex % 5 === 0) {
-            map.panTo(currentPoint);
-        }
-        
-        // Atualizar progresso
-        const progress = Math.round((pathIndex / interpolatedPath.length) * 100);
-        updateProgress(progress);
-        
-        pathIndex++;
-    } else {
-        // Animação completa
-        stopAnimation();
-        updateStatus('completed', '🎉 Destino alcançado!');
-        updateProgress(100);
-    }
-}
-
-/**
- * Atualiza velocidade
- */
-function updateSpeed() {
-    const slider = document.getElementById('speedSlider');
-    if (!slider) return;
-    
-    animationSpeed = 210 - parseInt(slider.value);
-    
-    // Reiniciar com nova velocidade se estiver animando
-    if (isAnimating) {
-        clearInterval(animationInterval);
-        animationInterval = setInterval(animateMarker, animationSpeed);
-    }
-}
-
-/**
- * Configura event listeners após elementos estarem prontos
- */
-function setupEventListeners() {
-    console.log('🎮 Configurando event listeners...');
-    
-    // Tentar várias vezes até elementos estarem disponíveis
-    let attempts = 0;
-    const maxAttempts = 10;
-    
-    function trySetup() {
-        const originInput = document.getElementById('origin');
-        const destInput = document.getElementById('destination');
-        
-        if (originInput && destInput) {
-            // Adicionar listeners para Enter
-            originInput.addEventListener('keypress', (e) => {
-                if (e.key === 'Enter') {
-                    console.log('🔍 Enter pressionado no campo origem');
-                    calculateRoute();
-                }
-            });
-            
-            destInput.addEventListener('keypress', (e) => {
-                if (e.key === 'Enter') {
-                    console.log('🔍 Enter pressionado no campo destino');
-                    calculateRoute();
-                }
-            });
-            
-            console.log('✅ Event listeners configurados com sucesso!');
-            return true;
+    animationInterval = setInterval(() => {
+        if (currentPathIndex < routePath.length - 1) {
+            currentPathIndex++;
+            const nextPosition = routePath[currentPathIndex];
+            marker.setPosition(nextPosition);
+            map.panTo(nextPosition); // Suaviza o movimento do mapa para seguir o carro
+            // Opcional: rotacionar o ícone do carro na direção do movimento
+            // Este é um recurso mais avançado e requer uma abordagem diferente (ex: Custom Overlay ou SVG dinâmico)
+            // pois a propriedade 'rotation' não existe diretamente para Marker icons estáticos.
+            // Se o ícone tiver direção fixa, não é necessário.
         } else {
-            attempts++;
-            if (attempts < maxAttempts) {
-                console.log(`⏳ Tentativa ${attempts}/${maxAttempts} - aguardando elementos...`);
-                setTimeout(trySetup, 200);
-            } else {
-                console.warn('⚠️ Não foi possível encontrar os campos de input após várias tentativas');
-            }
-            return false;
+            clearInterval(animationInterval);
+            updateStatus('idle', '🏁 Animação concluída!');
         }
-    }
-    
-    trySetup();
+    }, animationDelay); // Usar o delay calculado dinamicamente
 }
 
 /**
- * Atualiza status com proteção
+ * Reseta o mapa, limpando a rota e os inputs.
  */
-function updateStatus(type, message) {
-    console.log(`📢 Status: ${type} - ${message}`);
-    
-    const statusEl = document.getElementById('status');
-    if (statusEl) {
-        statusEl.className = `status ${type}`;
-        statusEl.textContent = message;
-    } else {
-        console.warn('⚠️ Elemento status não encontrado');
+function resetMap() {
+    if (animationInterval) {
+        clearInterval(animationInterval);
     }
+    directionsRenderer.setDirections({ routes: [] }); // Limpa a rota
+    marker.setVisible(false); // Esconde o marcador
+    currentPathIndex = 0;
+    routePath = [];
+    originInput.value = '';
+    destinationInput.value = '';
+    routeDetailsDiv.style.display = 'none';
+    updateStatus('idle', 'Mapa resetado. Pronto para uma nova rota!');
+    map.setCenter({ lat: -22.5211, lng: -41.9577 }); // Volta para o centro inicial
+    map.setZoom(12);
 }
 
-/**
- * Atualiza progresso com proteção
- */
-function updateProgress(percent) {
-    const progressEl = document.getElementById('progress');
-    if (progressEl) {
-        progressEl.textContent = `${percent}%`;
-    }
-}
-
-// Expor funções globalmente
-if (typeof window !== 'undefined') {
-    window.initMap = initMap;
-    window.calculateRoute = calculateRoute;
-    window.startAnimation = startAnimation;
-    window.stopAnimation = stopAnimation;
-    window.resetAnimation = resetAnimation;
-    window.updateSpeed = updateSpeed;
-}
-
-console.log('✅ map.js carregado com sucesso!');
+// Garante que o mapa seja inicializado quando a página carregar
+// A função initMap é chamada diretamente pela API do Google Maps via callback=initMap
