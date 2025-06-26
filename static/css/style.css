@@ -1,220 +1,71 @@
-/* Reset e configurações globais - Mantenha para resets que o Bootstrap não faz */
-* {
-    margin: 0;
-    padding: 0;
-    box-sizing: border-box;
-}
-
-html, body {
-    height: 100vh; /* Garante 100% da altura da viewport */
-    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    color: #333;
-    display: flex; /* Habilita flexbox para o layout principal */
-    flex-direction: column; /* Coloca header e main content em coluna */
-    overflow-x: hidden; /* Evita rolagem horizontal indesejada */
-}
-
-/* Header */
-.app-header {
-    background: rgba(255, 255, 255, 0.95);
-    backdrop-filter: blur(10px);
-    padding: 20px 0;
-    text-align: center;
-    position: sticky;
-    top: 0;
-    left: 0;
-    right: 0;
-    z-index: 1001;
-    box-shadow: 0 2px 20px rgba(0, 0, 0, 0.1);
-    flex-shrink: 0; /* Impede que o cabeçalho encolha */
-}
-
-.app-header h1 {
-    color: #4a4a4a;
-    font-size: 2.2em;
-    font-weight: 600;
-    text-shadow: 1px 1px 2px rgba(0,0,0,0.05);
-}
-
-/* Container principal para o layout de duas colunas */
-.container-fluid {
-    flex-grow: 1; /* Permite que o container principal ocupe o espaço restante */
-    display: flex; /* Habilita flexbox para as colunas */
-    flex-direction: column; /* Em telas pequenas, colunas ficam em coluna */
-    padding: 15px; /* Adiciona algum padding geral */
-}
-
-/* Painel de Controle - Adaptado para Bootstrap Grid */
-.control-panel {
-    background: rgba(255, 255, 255, 0.9);
-    backdrop-filter: blur(8px);
-    border-radius: 12px;
-    box-sizing: border-box;
-    text-align: center;
-    /* Removido position: absolute, top, left, z-index, min-width, max-width, margin */
-    /* Altura será gerenciada pelo d-flex h-100 do pai */
-}
-
-.control-panel h3 {
-    color: #555;
-    margin-bottom: 20px;
-    font-size: 1.6em;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 10px;
-}
-
-.control-panel .description {
-    font-size: 0.95em;
-    color: #666;
-    margin-bottom: 25px;
-    line-height: 1.5;
-}
-
-/* Estilos de Status e Detalhes da Rota */
-.status {
-    padding: 12px;
-    border-radius: 8px;
-    font-weight: 500;
-    text-align: center;
-    font-size: 0.95em;
-    margin-top: 15px;
-}
-
-.status.idle {
-    background-color: #d4edda; /* Light green */
-    color: #155724; /* Dark green */
-    border-color: #c3e6cb;
-}
-
-.status.loading {
-    background-color: #fff3cd; /* Light yellow */
-    color: #856404; /* Dark yellow */
-    border-color: #ffeeba;
-}
-
-.status.error {
-    background-color: #f8d7da; /* Light red */
-    color: #721c24; /* Dark red */
-    border-color: #f5c6cb;
-}
-
-.route-details {
-    padding: 15px;
-    margin-top: 20px;
-    font-size: 0.9em;
-    color: #333;
-    text-align: left;
-}
-
-.route-details p {
-    margin-bottom: 5px;
-}
-
-.route-details p:last-child {
-    margin-bottom: 0;
-}
-
-/* Controle de velocidade */
-.speed-control-group {
-    margin-top: 25px;
-    text-align: left;
+body {
     display: flex;
     flex-direction: column;
-    align-items: flex-start;
+    min-height: 100vh;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background-color: #f8f9fa; /* Light background */
 }
 
-.speed-control-group label {
-    margin-bottom: 10px;
-    font-weight: 500;
-    color: #444;
+.app-header {
+    background-color: #343a40; /* Dark gray for header */
+    color: white;
+    padding: 1rem;
+    text-align: center;
 }
 
-.speed-control-group .form-range {
-    -webkit-appearance: none;
-    height: 8px;
-    background: #d3d3d3;
-    outline: none;
-    opacity: 0.7;
-    transition: opacity .2s;
-    border-radius: 5px;
-    margin-top: 5px;
+main {
+    flex-grow: 1; /* Allows main content to take available vertical space */
 }
 
-.speed-control-group .form-range:hover {
-    opacity: 1;
+.control-panel {
+    background-color: #ffffff;
+    border: 1px solid #dee2e6;
+    border-radius: 0.5rem;
+    height: 100%; /* Ensure panel fills its column height */
+    display: flex;
+    flex-direction: column;
 }
 
-.speed-control-group .form-range::-webkit-slider-thumb {
-    -webkit-appearance: none;
-    appearance: none;
-    width: 20px;
-    height: 20px;
-    border-radius: 50%;
-    background: #667eea;
-    cursor: pointer;
-    box-shadow: 0 2px 5px rgba(102, 126, 234, 0.4);
-}
-
-.speed-control-group .form-range::-moz-range-thumb {
-    width: 20px;
-    height: 20px;
-    border-radius: 50%;
-    background: #667eea;
-    cursor: pointer;
-    box-shadow: 0 2px 5px rgba(102, 126, 234, 0.4);
-}
-
-.speed-control-group #speedValue {
-    margin-top: 10px;
-    font-size: 0.9em;
-    color: #777;
-    align-self: center;
-}
-
-/* Mapa */
 #map {
-    width: 100%;
-    height: 100%; /* Ocupa 100% da altura da sua coluna pai */
-    border-radius: 12px;
-    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.15);
-    background-color: #e0e0e0;
+    height: 100%; /* Map will fill its column height */
+    min-height: 400px; /* Minimum height for map on smaller screens */
+    border: 1px solid #dee2e6;
+    border-radius: 0.5rem;
+    overflow: hidden; /* Ensures map content stays within borders */
 }
 
-
-/* Responsividade */
-@media (min-width: 768px) {
-    .container-fluid {
-        flex-direction: row; /* Em telas maiores, as colunas ficam lado a lado */
-        height: calc(100vh - 90px); /* Altura total da tela menos a altura do header */
-        align-items: stretch; /* Garante que ambas as colunas tenham a mesma altura */
+/* Adjustments for smaller screens */
+@media (max-width: 767.98px) {
+    .control-panel {
+        margin-bottom: 1rem;
     }
-
-    .col-md-4, .col-md-8 {
-        padding: 0 15px; /* Ajuste o padding horizontal entre as colunas */
+    .order-md-1 {
+        order: 1; /* Panel on top on small screens */
     }
-    
-    /* Remove padding lateral extra que foi adicionado ao .map-container original */
-    .map-container {
-        padding: 0 !important; 
+    .order-md-2 {
+        order: 2; /* Map below panel on small screens */
     }
 }
 
-/* Ajustes para telas menores */
-@media (max-width: 767px) {
-    .col-md-4, .col-md-8 {
-        width: 100%; /* Em telas pequenas, as colunas ocupam 100% da largura */
-        padding-bottom: 15px; /* Espaçamento entre o painel e o mapa */
-    }
+.status {
+    font-weight: bold;
+    text-align: center;
+    margin-top: auto; /* Push status to the bottom */
+}
 
-    .control-panel, #map {
-        max-width: none; /* Remove restrições de largura em telas pequenas */
-        margin: 0; /* Remove margens automáticas */
-    }
+.description {
+    font-size: 0.9rem;
+    line-height: 1.4;
+    margin-bottom: 1rem;
+}
 
-    .container-fluid {
-        padding: 15px; /* Mantém padding para o container em telas pequenas */
-    }
+.speed-control-group {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    margin-top: 1rem;
+}
+
+.speed-control-group .form-label {
+    margin-bottom: 0.5rem;
 }

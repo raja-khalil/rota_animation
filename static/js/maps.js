@@ -1,189 +1,159 @@
+// static/js/maps.js
+
 let map;
+let directionsService; // Ainda pode ser útil para renderizar a rota completa se desejar, mas não para calcular
 let directionsRenderer;
-let marker;
+let currentMarker; // Usaremos AdvancedMarkerElement
 let animationInterval;
-let currentPathIndex = 0;
-let routePath = []; // Para armazenar os pontos da rota decodificados
+let animationPoints = []; // Stores the interpolated points for smooth animation
+let currentIndex = 0; // Current index in animationPoints
+let animationSpeed = 50; // Default speed, adjust as needed (0-100)
+let animationPaused = false;
 
-// Elementos do DOM
-const originInput = document.getElementById('origin');
-const destinationInput = document.getElementById('destination');
-const routeButton = document.getElementById('routeButton');
-const resetButton = document.getElementById('resetButton');
-const statusDiv = document.getElementById('status');
-const routeDetailsDiv = document.getElementById('route-details');
-const speedRangeInput = document.getElementById('speedRange');
-const speedValueSpan = document.getElementById('speedValue');
+// DOM Elements
+const originInput = document.getElementById('originInput');
+const destinationInput = document.getElementById('destinationInput');
+const calculateRouteButton = document.getElementById('calculateRouteButton');
+const resetMapButton = document.getElementById('resetMapButton');
+const startAnimationButton = document.getElementById('startAnimationButton');
+const pauseAnimationButton = document.getElementById('pauseAnimationButton');
+const speedRange = document.getElementById('speedRange');
+const speedValue = document.getElementById('speedValue');
+const routeDetails = document.getElementById('routeDetails');
+const distanceText = document.getElementById('distanceText');
+const durationText = document.getElementById('durationText');
+const statusMessage = document.getElementById('statusMessage');
 
-// Atraso base da animação (para velocidade "Normal" ou 1x)
-const BASE_ANIMATION_DELAY = 50; // milissegundos
+// Google Maps Autocomplete services
+let originAutocomplete;
+let destinationAutocomplete;
 
-/**
- * Calcula o delay da animação com base no valor do slider.
- * @param {number} sliderValue - Valor do slider (1 a 100).
- * @returns {number} Delay em milissegundos.
- */
-function getAnimationDelay(sliderValue) {
-    return BASE_ANIMATION_DELAY / sliderValue;
-}
+// Initialize Google Map
+async function initMap() {
+    // Definir as coordenadas do Brasil para o centro inicial
+    const brazilCenter = { lat: -14.235, lng: -51.925 };
 
-/**
- * Atualiza a mensagem de status para o usuário e as classes de estilo.
- * @param {string} type - Tipo de status (idle, loading, error).
- * @param {string} message - Mensagem a ser exibida.
- */
-function updateStatus(type, message) {
-    statusDiv.className = `status alert ${type === 'idle' ? 'alert-success' : type === 'loading' ? 'alert-warning' : 'alert-danger'}`;
-    statusDiv.textContent = message;
-}
+    map = new google.maps.Map(document.getElementById("map"), {
+        center: brazilCenter,
+        zoom: 4,
+        mapTypeControl: false,
+        streetViewControl: false,
+        fullscreenControl: false,
+        // mapId: "YOUR_MAP_ID" // Se estiver usando um Map ID para personalização avançada
+    });
 
-/**
- * Inicializa o mapa - função chamada pela API do Google Maps.
- */
-function initMap() {
-    console.log('🗺️ Inicializando mapa...');
-    
-    try {
-        const mapElement = document.getElementById("map");
-        if (!mapElement) {
-            throw new Error("Elemento do mapa (#map) não encontrado no DOM.");
+    directionsService = new google.maps.DirectionsService(); // Usado para obter a rota visual
+    directionsRenderer = new google.maps.DirectionsRenderer({
+        map: map,
+        suppressMarkers: true, // Hide default markers, we'll use our own
+        polylineOptions: {
+            strokeColor: '#176B87', // A nice blue
+            strokeOpacity: 0.8,
+            strokeWeight: 6
         }
+    });
 
-        map = new google.maps.Map(mapElement, {
-            // **IMPORTANTE: Substitua 'YOUR_MAP_ID' pelo ID do Mapa que você criar no Google Cloud Console.**
-            // Para mais informações, veja: https://developers.google.com/maps/documentation/javascript/cloud-customization#map_id
-            mapId: "YOUR_MAP_ID", 
-            zoom: 12,
-            center: { lat: -22.5211, lng: -41.9577 }, // Centro inicial (Rio das Ostras, Brasil)
-            mapTypeId: 'roadmap',
-            mapTypeControl: true,
-            streetViewControl: true,
-            fullscreenControl: true
-        });
+    // Initialize Autocomplete for input fields
+    // Using current `google.maps.places.Autocomplete` as per existing code,
+    // although console warns about `PlaceAutocompleteElement` being recommended.
+    originAutocomplete = new google.maps.places.Autocomplete(originInput, {
+        componentRestrictions: { country: "br" }, // Restrict to Brazil
+        fields: ["place_id", "geometry", "name", "formatted_address"],
+    });
+    destinationAutocomplete = new google.maps.places.Autocomplete(destinationInput, {
+        componentRestrictions: { country: "br" }, // Restrict to Brazil
+        fields: ["place_id", "geometry", "name", "formatted_address"],
+    });
 
-        directionsRenderer = new google.maps.DirectionsRenderer({
-            suppressMarkers: true, // Suprime os marcadores padrão da Directions API
-            polylineOptions: {
-                strokeColor: "#00d4aa",
-                strokeOpacity: 1.0,
-                strokeWeight: 4
+    // Try to get user's current location to bias autocomplete results
+    if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(
+            (position) => {
+                const geolocation = {
+                    lat: position.coords.latitude,
+                    lng: position.coords.longitude,
+                };
+                const circle = new google.maps.Circle({ center: geolocation, radius: position.coords.accuracy });
+                originAutocomplete.setBounds(circle.getBounds());
+                destinationAutocomplete.setBounds(circle.getBounds());
+                statusMessage.className = 'status alert alert-success mt-auto';
+                statusMessage.textContent = '🗺️ Mapa carregado! Tente digitar um endereço.';
+            },
+            () => {
+                handleLocationError(true);
             }
-        });
-        directionsRenderer.setMap(map);
+        );
+    } else {
+        // Browser doesn't support Geolocation
+        handleLocationError(false);
+    }
 
-        // **ATUALIZAÇÃO: Usando google.maps.marker.AdvancedMarkerElement**
-        // Por padrão, usaremos um glifo (emoji de carro).
-        // Se você tiver um arquivo 'car_icon.png' na pasta 'static/images/' e quiser usá-lo,
-        // você pode descomentar a seção de 'carIconElement' e passá-lo para 'content'.
-        
-        // Opção 1: Usar glifo (emoji) - Mais simples e não depende de arquivo de imagem.
-        const markerContent = new google.maps.marker.PinElement({
-            glyph: '🚗',
-            background: '#FFD700', // Amarelo
-            borderColor: '#FFD700',
-            glyphColor: '#FFFFFF', // Branco
-        }).element;
+    addEventListeners();
+    statusMessage.textContent = '🗺️ Mapa carregado! Digite os endereços.';
+    statusMessage.className = 'status alert alert-success mt-auto';
+}
 
-        // Opção 2: Usar imagem personalizada (descomente e use se tiver 'car_icon.png' e quiser priorizar)
-        /*
-        const carIconElement = document.createElement('img');
-        carIconElement.src = "{{ url_for('static', filename='images/car_icon.png') }}"; 
-        carIconElement.style.width = '35px';
-        carIconElement.style.height = '35px';
-        carIconElement.style.objectFit = 'contain';
-        const markerContent = carIconElement;
-        */
+function handleLocationError(browserHasGeolocation) {
+    statusMessage.className = 'status alert alert-warning mt-auto';
+    statusMessage.textContent = browserHasGeolocation
+        ? "⚠️ Erro: A localização não pôde ser determinada. Digite os endereços manualmente."
+        : "⚠️ Erro: Seu navegador não suporta geolocalização. Digite os endereços manualmente.";
+}
 
-        marker = new google.maps.marker.AdvancedMarkerElement({
-            map: null, // Inicializa escondido, sem mapa associado.
-            position: { lat: -22.5211, lng: -41.9577 }, // Posição inicial, será atualizada
-            content: markerContent,
-            // 'visible' não é uma propriedade direta do AdvancedMarkerElement.
-            // Para controlar a visibilidade, defina 'map' para null ou a instância do mapa.
-        });
+function addEventListeners() {
+    calculateRouteButton.addEventListener('click', calculateRoute);
+    resetMapButton.addEventListener('click', resetMap);
+    startAnimationButton.addEventListener('click', startAnimation);
+    pauseAnimationButton.addEventListener('click', pauseAnimation);
 
-        console.log('✅ Mapa inicializado com sucesso!');
-        updateStatus('idle', '🗺️ Mapa carregado! Digite os endereços.');
-        
-        setupEventListeners();
-        setupAutocompletes();
-        updateSpeedDisplay(); // Atualiza o display da velocidade inicial
-        
-    } catch (error) {
-        console.error('❌ Erro ao inicializar mapa:', error);
-        updateStatus('error', '❌ Erro ao carregar mapa: ' + error.message);
+    speedRange.addEventListener('input', () => {
+        animationSpeed = parseInt(speedRange.value);
+        speedValue.textContent = `Velocidade: ${animationSpeed}x`;
+        // Restart animation with new speed if it's already running and not paused
+        if (animationInterval && !animationPaused) {
+            clearInterval(animationInterval);
+            animateCar();
+        }
+    });
+
+    // Debounce input to avoid excessive calculations or autocomplete calls
+    originInput.addEventListener('input', debounce(checkInputs, 500));
+    destinationInput.addEventListener('input', debounce(checkInputs, 500));
+    checkInputs(); // Initial check
+}
+
+function checkInputs() {
+    const originFilled = originInput.value.trim() !== '';
+    const destinationFilled = destinationInput.value.trim() !== '';
+    calculateRouteButton.disabled = !(originFilled && destinationFilled);
+    if (!originFilled || !destinationFilled) {
+        resetMap(); // Reset map if inputs are cleared
     }
 }
 
-/**
- * Configura os listeners de eventos para os botões e slider.
- */
-function setupEventListeners() {
-    routeButton.addEventListener('click', calculateRoute);
-    resetButton.addEventListener('click', resetMap);
-    speedRangeInput.addEventListener('input', () => {
-        updateSpeedDisplay();
-        if (animationInterval) {
-            clearInterval(animationInterval);
-            startAnimation();
-        }
-    });
-}
 
-/**
- * Atualiza o texto que exibe o valor da velocidade do slider.
- */
-function updateSpeedDisplay() {
-    const value = parseInt(speedRangeInput.value);
-    speedValueSpan.textContent = `${value}x Velocidade`;
-}
-
-
-/**
- * Configura o autocomplete para os campos de endereço, permitindo buscar por nome de local.
- */
-function setupAutocompletes() {
-    // ATENÇÃO: google.maps.places.Autocomplete está depreciado para novos clientes a partir de Março de 2025.
-    // A recomendação é usar google.maps.places.PlaceAutocompleteElement.
-    // Para migrar, você precisaria alterar a estrutura HTML do seu input para usar o novo elemento customizado.
-    // Mais informações: https://developers.google.com/maps/legacy e https://developers.google.com/maps/documentation/javascript/places-migration-overview
-    // Por enquanto, mantemos o Autocomplete, pois ainda funciona para clientes existentes.
-    const originAutocomplete = new google.maps.places.Autocomplete(originInput, {
-        types: ['geocode', 'establishment'],
-        componentRestrictions: { 'country': ['br'] }
-    });
-
-    const destinationAutocomplete = new google.maps.places.Autocomplete(destinationInput, {
-        types: ['geocode', 'establishment'],
-        componentRestrictions: { 'country': ['br'] }
-    });
-
-    originAutocomplete.addListener('place_changed', () => {
-        const place = originAutocomplete.getPlace();
-        if (place.geometry) {
-            console.log('Origem selecionada:', place.formatted_address);
-        }
-    });
-    destinationAutocomplete.addListener('place_changed', () => {
-        const place = destinationAutocomplete.getPlace();
-        if (place.geometry) {
-            console.log('Destino selecionada:', place.formatted_address);
-        }
-    });
-}
-
-/**
- * Calcula rota entre dois pontos usando o backend.
- */
 async function calculateRoute() {
-    updateStatus('loading', '🔍 Calculando rota...');
-    routeDetailsDiv.style.display = 'none';
+    clearInterval(animationInterval);
+    animationInterval = null;
+    currentMarker?.setMap(null); // Remove previous marker
+    directionsRenderer.setDirections({ routes: [] }); // Clear previous route
+    animationPoints = [];
+    currentIndex = 0;
+    animationPaused = false;
 
-    const origin = originInput.value.trim();
-    const destination = destinationInput.value.trim();
+    routeDetails.style.display = 'none';
+    startAnimationButton.disabled = true;
+    pauseAnimationButton.disabled = true;
+    
+    statusMessage.className = 'status alert alert-info mt-auto';
+    statusMessage.textContent = '⏳ Calculando rota...';
+
+    const origin = originInput.value;
+    const destination = destinationInput.value;
 
     if (!origin || !destination) {
-        updateStatus('error', 'Por favor, preencha os endereços de origem e destino.');
+        statusMessage.className = 'status alert alert-danger mt-auto';
+        statusMessage.textContent = '❌ Por favor, preencha os endereços de origem e destino.';
         return;
     }
 
@@ -198,103 +168,178 @@ async function calculateRoute() {
 
         const data = await response.json();
 
-        if (!response.ok) {
-            throw new Error(data.error || 'Erro desconhecido ao calcular rota no backend.');
-        }
-
-        processRoute(data);
-
-    } catch (error) {
-        console.error('❌ Erro ao calcular rota:', error);
-        updateStatus('error', '❌ Erro: ' + error.message);
-    }
-}
-
-/**
- * Processa a rota recebida do backend (decodifica polilinha e inicia animação).
- * @param {object} routeData - Dados da rota contendo 'points' (polilinha codificada), 'distance', 'duration'.
- */
-function processRoute(routeData) {
-    if (animationInterval) {
-        clearInterval(animationInterval);
-    }
-    currentPathIndex = 0;
-    marker.map = null; // Esconde o marcador antes de iniciar a nova animação
-    directionsRenderer.setDirections({ routes: [] }); // Limpa a rota anterior no mapa
-
-    try {
-        routePath = google.maps.geometry.encoding.decodePath(routeData.points);
-
-        if (routePath.length === 0) {
-            throw new Error("Nenhum ponto de rota foi retornado.");
-        }
-
-        const newRoute = {
-            routes: [{
-                overview_polyline: { points: routeData.points },
-                legs: [{
-                    distance: { text: routeData.distance },
-                    duration: { text: routeData.duration }
+        if (response.ok) {
+            const decodedPath = google.maps.geometry.encoding.decodePath(data.points);
+            directionsRenderer.setDirections({
+                routes: [{
+                    overview_polyline: { points: data.points },
+                    legs: [{
+                        distance: { text: data.distance },
+                        duration: { text: data.duration }
+                    }]
                 }]
-            }]
-        };
-        directionsRenderer.setDirections(newRoute);
+            });
+            directionsRenderer.setMap(map);
 
-        routeDetailsDiv.innerHTML = `
-            <p><strong>Distância:</strong> ${routeData.distance}</p>
-            <p><strong>Duração Estimada:</strong> ${routeData.duration}</p>
-        `;
-        routeDetailsDiv.style.display = 'block';
+            animationPoints = interpolatePath(decodedPath, 500); // Interpolate for smoother animation
+            
+            // Using google.maps.marker.AdvancedMarkerElement (recommended)
+            // Note: Requires 'marker' library in script tag
+            const { AdvancedMarkerElement } = await google.maps.importLibrary("marker");
+            currentMarker = new AdvancedMarkerElement({
+                map: map,
+                position: animationPoints[0],
+                // glyph: '🚗', // Can use emojis or custom content
+                content: createCarMarkerContent() // Custom car icon
+            });
+            
+            map.setCenter(animationPoints[0]);
+            map.setZoom(15); // Zoom in on the start of the route
 
-        marker.position = routePath[0];
-        marker.map = map; // Exibe o marcador, associando-o ao mapa
-        map.setCenter(routePath[0]);
+            distanceText.textContent = data.distance;
+            durationText.textContent = data.duration;
+            routeDetails.style.display = 'block';
 
-        updateStatus('idle', '✅ Rota calculada! Iniciando animação...');
-        startAnimation();
+            startAnimationButton.disabled = false;
+            statusMessage.className = 'status alert alert-success mt-auto';
+            statusMessage.textContent = '✅ Rota calculada! Clique em Iniciar Animação.';
 
+        } else {
+            statusMessage.className = 'status alert alert-danger mt-auto';
+            statusMessage.textContent = `❌ Erro: ${data.error || 'Não foi possível calcular a rota.'}`;
+            routeDetails.style.display = 'none';
+            console.error('Backend Error:', data.error);
+        }
     } catch (error) {
-        console.error('❌ Erro ao processar rota:', error);
-        updateStatus('error', '❌ Erro ao exibir rota: ' + error.message);
-        routeDetailsDiv.style.display = 'none';
+        statusMessage.className = 'status alert alert-danger mt-auto';
+        statusMessage.textContent = '❌ Erro de rede ou servidor ao calcular a rota.';
+        routeDetails.style.display = 'none';
+        console.error('Fetch Error:', error);
     }
 }
 
-/**
- * Inicia a animação do marcador ao longo da rota.
- */
-function startAnimation() {
-    const animationDelay = getAnimationDelay(parseInt(speedRangeInput.value));
-    console.log(`Iniciando animação com delay de: ${animationDelay}ms`);
-
-    animationInterval = setInterval(() => {
-        if (currentPathIndex < routePath.length - 1) {
-            currentPathIndex++;
-            const nextPosition = routePath[currentPathIndex];
-            marker.position = nextPosition;
-            map.panTo(nextPosition);
-        } else {
-            clearInterval(animationInterval);
-            updateStatus('idle', '🏁 Animação concluída!');
-        }
-    }, animationDelay);
+// Function to create a custom car marker element
+function createCarMarkerContent() {
+    const markerContent = document.createElement('div');
+    markerContent.style.width = '32px';
+    markerContent.style.height = '32px';
+    markerContent.style.backgroundImage = 'url(https://maps.gstatic.com/mapfiles/ms/micons/car.png)'; // Example car icon
+    markerContent.style.backgroundSize = 'contain';
+    markerContent.style.backgroundRepeat = 'no-repeat';
+    markerContent.style.transform = 'translate(-50%, -50%)'; // Center the marker
+    return markerContent;
 }
 
-/**
- * Reseta o mapa, limpando a rota e os inputs.
- */
-function resetMap() {
+
+function interpolatePath(path, stepsPerSegment) {
+    const interpolated = [];
+    for (let i = 0; i < path.length - 1; i++) {
+        const p1 = path[i];
+        const p2 = path[i+1];
+        const distance = google.maps.geometry.spherical.computeDistanceBetween(p1, p2);
+        // Ensure stepsPerSegment is reasonable for short segments
+        const numSteps = Math.max(1, Math.ceil(distance / stepsPerSegment));
+
+        for (let j = 0; j < numSteps; j++) {
+            const fraction = j / numSteps;
+            const interpolatedPoint = google.maps.geometry.spherical.interpolate(p1, p2, fraction);
+            interpolated.push(interpolatedPoint);
+        }
+    }
+    interpolated.push(path[path.length - 1]); // Add the very last point
+    return interpolated;
+}
+
+
+function startAnimation() {
+    if (animationPoints.length === 0) {
+        statusMessage.className = 'status alert alert-danger mt-auto';
+        statusMessage.textContent = '❌ Calcule uma rota primeiro!';
+        return;
+    }
+    
+    if (animationInterval) {
+        clearInterval(animationInterval); // Clear any existing interval
+    }
+    animationPaused = false;
+    startAnimationButton.disabled = true;
+    pauseAnimationButton.disabled = false;
+    statusMessage.className = 'status alert alert-primary mt-auto';
+    statusMessage.textContent = '▶️ Animação em andamento...';
+
+    // Adjust interval based on speed slider value (1 to 100)
+    // Faster speed = smaller interval
+    const intervalTime = Math.max(5, 100 - (animationSpeed - 1)); // Max 100ms, min 5ms
+    
+    animateCar(); // Call immediately to place car at start
+    animationInterval = setInterval(animateCar, intervalTime);
+}
+
+function animateCar() {
+    if (currentIndex < animationPoints.length) {
+        const position = animationPoints[currentIndex];
+        currentMarker.position = position; // Update AdvancedMarkerElement position
+        map.setCenter(position); // Keep map centered on the car
+        currentIndex++;
+    } else {
+        clearInterval(animationInterval);
+        animationInterval = null;
+        pauseAnimationButton.disabled = true;
+        startAnimationButton.disabled = true;
+        statusMessage.className = 'status alert alert-success mt-auto';
+        statusMessage.textContent = '✅ Animação concluída!';
+    }
+}
+
+function pauseAnimation() {
     if (animationInterval) {
         clearInterval(animationInterval);
+        animationInterval = null;
+        animationPaused = true;
+        startAnimationButton.disabled = false; // Allow resuming
+        pauseAnimationButton.disabled = true;
+        statusMessage.className = 'status alert alert-warning mt-auto';
+        statusMessage.textContent = '⏸️ Animação pausada.';
     }
-    directionsRenderer.setDirections({ routes: [] });
-    marker.map = null; // Esconde o marcador
-    currentPathIndex = 0;
-    routePath = [];
+}
+
+function resetMap() {
+    clearInterval(animationInterval);
+    animationInterval = null;
+    animationPaused = false;
+    currentIndex = 0;
+    animationPoints = [];
+
+    if (currentMarker) {
+        currentMarker.setMap(null); // Remove car marker
+        currentMarker = null;
+    }
+    
+    directionsRenderer.setDirections({ routes: [] }); // Clear route from map
+
+    map.setCenter({ lat: -14.235, lng: -51.925 }); // Reset map center to Brazil
+    map.setZoom(4); // Reset zoom level
+
     originInput.value = '';
     destinationInput.value = '';
-    routeDetailsDiv.style.display = 'none';
-    updateStatus('idle', 'Mapa resetado. Pronto para uma nova rota!');
-    map.setCenter({ lat: -22.5211, lng: -41.9577 });
-    map.setZoom(12);
+    routeDetails.style.display = 'none';
+
+    calculateRouteButton.disabled = true;
+    startAnimationButton.disabled = true;
+    pauseAnimationButton.disabled = true;
+    statusMessage.className = 'status alert alert-info mt-auto';
+    statusMessage.textContent = '🔄 Mapa resetado. Digite novos endereços.';
 }
+
+// Debounce function to limit how often a function is called (e.g., for input changes)
+function debounce(func, delay) {
+    let timeout;
+    return function(...args) {
+        const context = this;
+        clearTimeout(timeout);
+        timeout = setTimeout(() => func.apply(context, args), delay);
+    };
+}
+
+// Make initMap globally accessible for the Google Maps API callback
+window.initMap = initMap;

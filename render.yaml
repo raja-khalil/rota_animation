@@ -1,15 +1,18 @@
 services:
   - type: web
-    name: animacao-rotas-app
+    name: animacao-rotas # O nome do seu serviço no Render
     env: python
-    region: oregon
+    region: oregon # ou a região mais próxima de seus usuários
     plan: free
     buildCommand: pip install -r requirements.txt
-    startCommand: gunicorn app:app
+    startCommand: gunicorn app:app --log-file - --access-logfile - # Adicionado logs para stdout/stderr
     envVars:
-      - key: Maps_API_KEY # Chave da API do Google Maps (manter segura!)
-        sync: false # Importante: não sincronizar com o Git, configurar diretamente no Render
+      # Variáveis de ambiente para o Render (coloque sua chave REAL aqui)
+      - key: Maps_API_KEY
+        value: 'AIzaSyCFUIkhN_hx7LhwlRWnqj_uaq4KejUSBBs'
+      - key: SECRET_KEY
+        generateValue: true # O Render pode gerar uma chave segura automaticamente
       - key: FLASK_ENV
         value: production
-      - key: SECRET_KEY
-        generateValue: true # Gerar uma chave secreta automaticamente
+      - key: PYTHON_VERSION
+        value: 3.11.x # Garanta a versão do Python

@@ -6,3 +6,5 @@
 404 Not Found: /{{ url_for('static', filename='images/car_icon.png') }}
 404 Not Found: /.well-known/appspecific/com.chrome.devtools.json
 404 Not Found: /.well-known/appspecific/com.chrome.devtools.json
+404 Not Found: /favicon.ico
+404 Not Found: /.well-known/appspecific/com.chrome.devtools.json
