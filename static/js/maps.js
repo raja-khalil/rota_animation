@@ -1,14 +1,16 @@
 // static/js/maps.js
 
-let map;
-let directionsService; // Ainda pode ser útil para renderizar a rota completa se desejar, mas não para calcular
-let directionsRenderer;
-let currentMarker; // Usaremos AdvancedMarkerElement
-let animationInterval;
-let animationPoints = []; // Stores the interpolated points for smooth animation
-let currentIndex = 0; // Current index in animationPoints
-let animationSpeed = 50; // Default speed, adjust as needed (0-100)
-let animationPaused = false;
+// Alteradas de 'let' para 'var' para garantir acesso global/amplo escopo
+var map;
+var directionsService; 
+var directionsRenderer; 
+var currentMarker; 
+var animationInterval;
+var animationPoints = []; 
+var currentIndex = 0; 
+var animationSpeed = 50; 
+var animationPaused = false;
+var routePolyline; // Variável para armazenar a Polyline da rota
 
 // DOM Elements
 const originInput = document.getElementById('originInput');
@@ -25,8 +27,8 @@ const durationText = document.getElementById('durationText');
 const statusMessage = document.getElementById('statusMessage');
 
 // Google Maps Autocomplete services
-let originAutocomplete;
-let destinationAutocomplete;
+var originAutocomplete;
+var destinationAutocomplete;
 
 // Initialize Google Map
 async function initMap() {
@@ -39,29 +41,26 @@ async function initMap() {
         mapTypeControl: false,
         streetViewControl: false,
         fullscreenControl: false,
-        // mapId: "YOUR_MAP_ID" // Se estiver usando um Map ID para personalização avançada
+        mapId: "DEMO_MAP_ID" // Adicionado Map ID para Advanced Markers. Substitua por seu próprio ID de Mapa válido.
     });
 
-    directionsService = new google.maps.DirectionsService(); // Usado para obter a rota visual
+    directionsService = new google.maps.DirectionsService(); 
     directionsRenderer = new google.maps.DirectionsRenderer({
-        map: map,
-        suppressMarkers: true, // Hide default markers, we'll use our own
+        suppressMarkers: true, 
         polylineOptions: {
-            strokeColor: '#176B87', // A nice blue
+            strokeColor: '#176B87', 
             strokeOpacity: 0.8,
             strokeWeight: 6
         }
     });
 
     // Initialize Autocomplete for input fields
-    // Using current `google.maps.places.Autocomplete` as per existing code,
-    // although console warns about `PlaceAutocompleteElement` being recommended.
     originAutocomplete = new google.maps.places.Autocomplete(originInput, {
-        componentRestrictions: { country: "br" }, // Restrict to Brazil
+        componentRestrictions: { country: "br" }, 
         fields: ["place_id", "geometry", "name", "formatted_address"],
     });
     destinationAutocomplete = new google.maps.places.Autocomplete(destinationInput, {
-        componentRestrictions: { country: "br" }, // Restrict to Brazil
+        componentRestrictions: { country: "br" }, 
         fields: ["place_id", "geometry", "name", "formatted_address"],
     });
 
@@ -116,27 +115,26 @@ function addEventListeners() {
         }
     });
 
-    // Debounce input to avoid excessive calculations or autocomplete calls
     originInput.addEventListener('input', debounce(checkInputs, 500));
     destinationInput.addEventListener('input', debounce(checkInputs, 500));
-    checkInputs(); // Initial check
+    checkInputs(); 
 }
 
 function checkInputs() {
     const originFilled = originInput.value.trim() !== '';
     const destinationFilled = destinationInput.value.trim() !== '';
     calculateRouteButton.disabled = !(originFilled && destinationFilled);
-    if (!originFilled || !destinationFilled) {
-        resetMap(); // Reset map if inputs are cleared
-    }
 }
 
 
 async function calculateRoute() {
-    clearInterval(animationInterval);
+    clearInterval(animationInterval); 
     animationInterval = null;
-    currentMarker?.setMap(null); // Remove previous marker
-    directionsRenderer.setDirections({ routes: [] }); // Clear previous route
+    currentMarker?.setMap(null); 
+    
+    if (routePolyline) { 
+        routePolyline.setMap(null); 
+    }
     animationPoints = [];
     currentIndex = 0;
     animationPaused = false;
@@ -170,31 +168,47 @@ async function calculateRoute() {
 
         if (response.ok) {
             const decodedPath = google.maps.geometry.encoding.decodePath(data.points);
-            directionsRenderer.setDirections({
-                routes: [{
-                    overview_polyline: { points: data.points },
-                    legs: [{
-                        distance: { text: data.distance },
-                        duration: { text: data.duration }
-                    }]
-                }]
-            });
-            directionsRenderer.setMap(map);
-
-            animationPoints = interpolatePath(decodedPath, 500); // Interpolate for smoother animation
             
-            // Using google.maps.marker.AdvancedMarkerElement (recommended)
-            // Note: Requires 'marker' library in script tag
+            // Renderiza a rota como Polyline diretamente para ter controle total
+            routePolyline = new google.maps.Polyline({ 
+                path: decodedPath, 
+                geodesic: true, 
+                strokeColor: '#007bff', // Azul 
+                strokeOpacity: 0.8, 
+                strokeWeight: 6, 
+                icons: [{ // Padrão de linha tracejada 
+                    icon: { 
+                        path: 'M 0,-1 0,1', // Linha vertical curta 
+                        strokeOpacity: 1, 
+                        strokeWeight: 2 
+                    }, 
+                    offset: '0', 
+                    repeat: '20px' // Repete a cada 20 pixels 
+                }], 
+            }); 
+            routePolyline.setMap(map); 
+
+            // **AJUSTE: Centraliza e ajusta o zoom para mostrar a rota completa**
+            const bounds = new google.maps.LatLngBounds();
+            for (let i = 0; i < decodedPath.length; i++) {
+                bounds.extend(decodedPath[i]);
+            }
+            map.fitBounds(bounds);
+
+
+            // **AJUSTE: Aumenta a densidade dos pontos interpolados para animação mais suave**
+            animationPoints = interpolatePath(decodedPath, 200); // Antes 500, agora 200 para mais suavidade
+            
             const { AdvancedMarkerElement } = await google.maps.importLibrary("marker");
             currentMarker = new AdvancedMarkerElement({
                 map: map,
                 position: animationPoints[0],
-                // glyph: '🚗', // Can use emojis or custom content
                 content: createCarMarkerContent() // Custom car icon
             });
             
-            map.setCenter(animationPoints[0]);
-            map.setZoom(15); // Zoom in on the start of the route
+            // O zoom de locomoção será aplicado APENAS ao iniciar a animação
+            // map.setCenter(animationPoints[0]); // Removido daqui
+            // map.setZoom(17); // Removido daqui
 
             distanceText.textContent = data.distance;
             durationText.textContent = data.duration;
@@ -202,7 +216,7 @@ async function calculateRoute() {
 
             startAnimationButton.disabled = false;
             statusMessage.className = 'status alert alert-success mt-auto';
-            statusMessage.textContent = '✅ Rota calculada! Clique em Iniciar Animação.';
+            statusMessage.textContent = '✅ Rota calculada! Pronto para animar.';
 
         } else {
             statusMessage.className = 'status alert alert-danger mt-auto';
@@ -218,15 +232,17 @@ async function calculateRoute() {
     }
 }
 
-// Function to create a custom car marker element
+// Function to create a custom car marker element using inline SVG
 function createCarMarkerContent() {
     const markerContent = document.createElement('div');
-    markerContent.style.width = '32px';
-    markerContent.style.height = '32px';
-    markerContent.style.backgroundImage = 'url(https://maps.gstatic.com/mapfiles/ms/micons/car.png)'; // Example car icon
-    markerContent.style.backgroundSize = 'contain';
-    markerContent.style.backgroundRepeat = 'no-repeat';
-    markerContent.style.transform = 'translate(-50%, -50%)'; // Center the marker
+    markerContent.innerHTML = `
+        <svg width="32" height="32" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg">
+            <circle cx="16" cy="16" r="14" fill="white" stroke="#ddd" stroke-width="2"/>
+            <circle cx="16" cy="16" r="10" fill="#2c3e50"/>
+            <polygon points="16,8 20,14 12,14" fill="white"/>
+        </svg>
+    `;
+    markerContent.style.transform = 'translate(-50%, -50%)'; 
     return markerContent;
 }
 
@@ -237,7 +253,7 @@ function interpolatePath(path, stepsPerSegment) {
         const p1 = path[i];
         const p2 = path[i+1];
         const distance = google.maps.geometry.spherical.computeDistanceBetween(p1, p2);
-        // Ensure stepsPerSegment is reasonable for short segments
+        // numSteps agora será maior devido ao stepsPerSegment menor, resultando em mais pontos
         const numSteps = Math.max(1, Math.ceil(distance / stepsPerSegment));
 
         for (let j = 0; j < numSteps; j++) {
@@ -246,7 +262,7 @@ function interpolatePath(path, stepsPerSegment) {
             interpolated.push(interpolatedPoint);
         }
     }
-    interpolated.push(path[path.length - 1]); // Add the very last point
+    interpolated.push(path[path.length - 1]); 
     return interpolated;
 }
 
@@ -259,7 +275,7 @@ function startAnimation() {
     }
     
     if (animationInterval) {
-        clearInterval(animationInterval); // Clear any existing interval
+        clearInterval(animationInterval); 
     }
     animationPaused = false;
     startAnimationButton.disabled = true;
@@ -267,19 +283,22 @@ function startAnimation() {
     statusMessage.className = 'status alert alert-primary mt-auto';
     statusMessage.textContent = '▶️ Animação em andamento...';
 
-    // Adjust interval based on speed slider value (1 to 100)
-    // Faster speed = smaller interval
-    const intervalTime = Math.max(5, 100 - (animationSpeed - 1)); // Max 100ms, min 5ms
+    // **AJUSTE: Define o zoom de locomoção ao iniciar a animação**
+    map.setZoom(17); 
     
-    animateCar(); // Call immediately to place car at start
+    // AUMENTADA A VELOCIDADE MÁXIMA PARA TORNAR O MÍNIMO MAIS LENTO
+    // O fator '4' torna a velocidade mínima ainda mais lenta
+    const intervalTime = Math.max(5, (101 - animationSpeed) * 4); 
+    
+    animateCar(); 
     animationInterval = setInterval(animateCar, intervalTime);
 }
 
 function animateCar() {
     if (currentIndex < animationPoints.length) {
         const position = animationPoints[currentIndex];
-        currentMarker.position = position; // Update AdvancedMarkerElement position
-        map.setCenter(position); // Keep map centered on the car
+        currentMarker.position = position; 
+        map.setCenter(position); // O mapa seguirá o carro, mantendo o zoom atual da animação
         currentIndex++;
     } else {
         clearInterval(animationInterval);
@@ -296,7 +315,7 @@ function pauseAnimation() {
         clearInterval(animationInterval);
         animationInterval = null;
         animationPaused = true;
-        startAnimationButton.disabled = false; // Allow resuming
+        startAnimationButton.disabled = false; 
         pauseAnimationButton.disabled = true;
         statusMessage.className = 'status alert alert-warning mt-auto';
         statusMessage.textContent = '⏸️ Animação pausada.';
@@ -311,14 +330,18 @@ function resetMap() {
     animationPoints = [];
 
     if (currentMarker) {
-        currentMarker.setMap(null); // Remove car marker
+        currentMarker.setMap(null); 
         currentMarker = null;
     }
     
-    directionsRenderer.setDirections({ routes: [] }); // Clear route from map
+    // Limpa a Polyline da rota ao resetar o mapa
+    if (routePolyline) { 
+        routePolyline.setMap(null); 
+        routePolyline = null; 
+    }
 
-    map.setCenter({ lat: -14.235, lng: -51.925 }); // Reset map center to Brazil
-    map.setZoom(4); // Reset zoom level
+    map.setCenter({ lat: -14.235, lng: -51.925 }); 
+    map.setZoom(4); // Retorna ao zoom original do Brasil
 
     originInput.value = '';
     destinationInput.value = '';
@@ -331,7 +354,6 @@ function resetMap() {
     statusMessage.textContent = '🔄 Mapa resetado. Digite novos endereços.';
 }
 
-// Debounce function to limit how often a function is called (e.g., for input changes)
 function debounce(func, delay) {
     let timeout;
     return function(...args) {
@@ -341,5 +363,4 @@ function debounce(func, delay) {
     };
 }
 
-// Make initMap globally accessible for the Google Maps API callback
 window.initMap = initMap;

@@ -3,15 +3,15 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Animação de Rotas - Estilo Uber</title>
+    <title>Busca Rotas</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
-    <link rel="icon" type="image/png" href="{{ url_for('static', filename='images/favicon.png') }}">
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='%23007bff' d='M20 7h-4V4c0-1.1-.9-2-2-2h-4c-1.1 0-2 .9-2 2v3H4c-1.1 0-2 .9-2 2v11c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V9c0-1.1-.9-2-2-2zM10 4h4v3h-4V4zm10 16H4V9h16v11zM7 12v2h2v-2H7zm4 0v2h2v-2h-2zm4 0v2h2v-2h-2z'/%3E%3C/svg%3E" type="image/svg+xml">
 </head>
 <body class="d-flex flex-column min-vh-100">
     <header class="app-header bg-dark text-white p-3 shadow-sm">
         <div class="container-fluid">
-            <h1 class="h3 mb-0">Animação de Rota - Estilo Uber 🚗</h1>
+            <h1 class="h3 mb-0">Busca Rotas</h1>
         </div>
     </header>
 
@@ -19,6 +19,8 @@
         <div class="col-md-4 col-lg-3 p-3 d-flex order-md-1">
             <div class="control-panel card p-4 shadow-sm h-100 w-100 d-flex flex-column">
                 <h3 class="mb-3">Configurações da Rota</h3>
+                <strog>Desenvolvido por E-Magna</strog>
+
                 <p class="description text-muted">
                     Digite os endereços de partida e destino para ver a animação no mapa.
                 </p>
@@ -46,8 +48,8 @@
                 </div>
 
                 <div class="d-grid gap-2 mb-3">
-                    <button id="startAnimationButton" class="btn btn-success btn-lg" disabled>▶️ Iniciar Animação</button>
-                    <button id="pauseAnimationButton" class="btn btn-warning btn-sm" disabled>⏸️ Pausar Animação</button>
+                    <button id="startAnimationButton" class="btn btn-success btn-lg" disabled>▶️ Iniciar Rota</button>
+                    <button id="pauseAnimationButton" class="btn btn-warning btn-sm" disabled>⏸️ Pausar Rota</button>
                 </div>
 
                 <div id="routeDetails" class="alert alert-info mt-3" style="display:none;">
